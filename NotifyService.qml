@@ -7,7 +7,8 @@ import Quickshell.Services.Notifications
 import qs.Commons
 import "quick"
 
-// The Control Center's notification daemon, used when you switch it on
+// The Control Center's background service: peripheral batteries (always), and
+// the notification daemon, used when you switch it on
 // (Notifications page → "Use Quick Settings for notifications").
 //
 // Only one program can own notifications. Like Dynamic Island, this takes the
@@ -120,6 +121,72 @@ Scope {
     dnd = value === true
     saveSettings()
     if (dnd) popupIds = popupIds.filter(function(id) { var n = byId(id); return n && n.urgency === NotificationUrgency.Critical })
+  }
+
+  // ------------------------------------------------------------ peripherals
+  // Logitech Unifying/Bolt devices aren't Bluetooth and Linux exposes no
+  // battery for them; Solaar reads it over HID++ (~6 s). Polled here in the
+  // background and cached, so the Power page shows it at once and a sleeping
+  // mouse keeps its last known level.
+  property var peripherals: []        // [{model, kind, percent, status, source, seen}]
+  readonly property string peripheralsPath: stateDir + "/peripherals.json"
+  FileView {
+    id: periphFile
+    path: svc.peripheralsPath
+    printErrors: false
+    atomicWrites: true
+    onLoaded: { try { var o = JSON.parse(text()); if (Array.isArray(o)) svc.peripherals = o } catch (e) {} }
+  }
+  Process {
+    id: solaar
+    command: ["timeout", "25", "solaar", "show"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: svc.parseSolaar(text)
+    }
+  }
+  Timer { interval: 180000; running: true; repeat: true; triggeredOnStart: true; onTriggered: svc.refreshPeripherals() }
+  function refreshPeripherals() { if (!solaar.running) solaar.running = true }
+  // Other tools (e.g. a gadget-batteries plugin) poll Solaar too; two queries
+  // at once collide on the receiver and battery lines come back empty. Retry
+  // a few times at a random offset so we fall out of step with them.
+  property int periphRetries: 0
+  Timer { id: periphRetry; repeat: false; onTriggered: svc.refreshPeripherals() }
+  function parseSolaar(out) {
+    var found = [], cur = null
+    String(out || "").split("\n").forEach(function(l) {
+      var m = /^  (\d+): (.+)$/.exec(l)
+      if (m) { cur = { model: m[2].trim().slice(0, 60), kind: "", percent: -1, status: "", source: "Logitech receiver" }; found.push(cur); return }
+      if (!cur) return
+      // The header name and the DEVICE NAME feature must agree; a mismatch
+      // means another Solaar query spliced its reply in (names come in 16-byte
+      // chunks), so the whole reading is treated as a collision.
+      var nm = /^\s+Name:\s*(.+)$/.exec(l)
+      if (nm && nm[1].trim().slice(0, 60) !== cur.model) cur.corrupt = true
+      var k = /^\s+Kind\s*:\s*(\w+)/.exec(l)
+      if (k && !cur.kind) cur.kind = k[1]
+      var b = /Battery:\s*(\d+)%(?:,\s*BatteryStatus\.(\w+))?/.exec(l)
+      if (b && cur.percent < 0) { cur.percent = Number(b[1]); cur.status = (b[2] || "").toLowerCase() }
+    })
+    var corrupt = found.some(function(d) { return d.corrupt })
+    var gotReading = !corrupt && found.some(function(d) { return d.percent >= 0 })
+    if (!gotReading && found.length > 0 && periphRetries < 3) {
+      periphRetries++
+      periphRetry.interval = 4000 + Math.floor(Math.random() * 9000)
+      periphRetry.restart()
+    } else if (gotReading) periphRetries = 0
+    if (found.length === 0 || corrupt) return   // solaar missing, receiver busy or garbled: keep what we had
+    var now = Date.now(), prev = {}
+    peripherals.forEach(function(p) { prev[p.model] = p })
+    var next = found.map(function(d) {
+      if (d.percent >= 0) { d.seen = now; return d }
+      // Asleep: keep the last reading, marked by when it was taken.
+      var old = prev[d.model]
+      if (old && old.percent >= 0) { d.percent = old.percent; d.status = old.status; d.seen = old.seen }
+      return d
+    }).filter(function(d) { return d.percent >= 0 })
+    peripherals = next
+    periphFile.setText(JSON.stringify(next) + "\n")
   }
 
   // ------------------------------------------------------------ server
@@ -305,7 +372,9 @@ Scope {
     implicitHeight: Math.max(1, stack.implicitHeight)
     WlrLayershell.namespace: "control-center-notifications"
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    // Never take the keyboard on arrival: only while the pointer is over a
+    // pop-up (to type a reply) can it receive focus, and only on click.
+    WlrLayershell.keyboardFocus: svc.held ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     Column {
       id: stack

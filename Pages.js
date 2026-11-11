@@ -9,6 +9,8 @@ var PAGES = [
   { id: "bluetooth",     title: "Bluetooth",        icon: Icons.bluetooth,       file: "BluetoothPage.qml",     keys: "pair devices headset headphones mouse keyboard airpods discoverable" },
   { id: "sound",         title: "Sound",            icon: Icons.volume,          file: "SoundPage.qml",         keys: "audio volume output input speaker headset headphones microphone mic apps" },
   { id: "displays",      title: "Displays",         icon: Icons.monitor,         file: "DisplaysPage.qml",      keys: "monitor screen resolution refresh rate scale brightness night light text size mirror" },
+  { id: "printers",      title: "Printers & Scanners", icon: Icons.printer,       file: "PrintersPage.qml",      keys: "printer print scanner scan cups ipp airprint escl sane document" },
+  { id: "devices",       title: "Network Devices",  icon: Icons.lan,             file: "DevicesPage.qml",       keys: "lan devices network scan neighbours ip mac router hosts who is connected" },
   { id: "power",         title: "Power",            icon: Icons.batteryCharging, file: "PowerPage.qml",         keys: "battery power mode profile performance saver idle lock screensaver suspend shutdown reboot" },
   { id: "windows",       title: "Windows & Layout", icon: Icons.windows,         file: "WindowsPage.qml",       keys: "hyprland tiling layout dwindle master scrolling gaps borders rounding blur shadow animations opacity focus workspaces" },
   { id: "input",         title: "Keyboard & Mouse", icon: Icons.keyboard,        file: "InputPage.qml",         keys: "keyboard layout repeat mouse touchpad trackpad scroll natural tap sensitivity" },

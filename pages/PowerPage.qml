@@ -41,27 +41,8 @@ CcPage {
     return list.concat(logitech)
   }
 
-  // Logitech Unifying/Bolt receiver devices aren't Bluetooth and Linux exposes
-  // no battery for them; Solaar reads it over HID++ (takes a few seconds).
-  property var logitech: []
-  property bool solaarMissing: false
-  function refreshLogitech() {
-    cc.runner.run(["timeout", "20", "solaar", "show"], function(code, out) {
-      if (code === 127) { page.solaarMissing = true; return }
-      var list = [], cur = null
-      String(out).split("\n").forEach(function(l) {
-        var m = /^  (\d+): (.+)$/.exec(l)
-        if (m) { cur = { model: m[2].trim(), percent: -1, kind: "", status: "", source: "Logitech receiver" }; list.push(cur); return }
-        if (!cur) return
-        var k = /^\s+Kind\s*:\s*(\w+)/.exec(l)
-        if (k && !cur.kind) cur.kind = k[1]
-        var b = /Battery:\s*(\d+)%(?:,\s*BatteryStatus\.(\w+))?/.exec(l)
-        if (b && cur.percent < 0) { cur.percent = Number(b[1]); cur.status = (b[2] || "").toLowerCase() }
-      })
-      page.logitech = list.filter(function(d) { return d.percent >= 0 })
-    })
-  }
-  Timer { interval: 60000; running: true; repeat: true; triggeredOnStart: true; onTriggered: page.refreshLogitech() }
+  // Logitech receiver devices come from the background service (Solaar, cached).
+  readonly property var logitech: cc.notifService ? cc.notifService.peripherals : []
 
   function duration(sec) {
     if (!sec || sec <= 0) return ""
@@ -95,7 +76,7 @@ CcPage {
     })
     cc.runner.run(["omarchy-toggle-enabled", "suspend-off"], function(code) { page.suspendHidden = code === 0 })
   }
-  Component.onCompleted: { refreshProfiles(); refreshAwake() }
+  Component.onCompleted: { refreshProfiles(); refreshAwake(); if (cc.notifService) cc.notifService.refreshPeripherals() }
   onOnBatteryChanged: refreshProfiles()
   Timer { interval: 4000; running: true; repeat: true; onTriggered: { page.refreshProfiles(); page.refreshAwake() } }
 
@@ -168,6 +149,7 @@ CcPage {
         iconColor: modelData.percent <= 15 ? Color.urgent : Color.menu.text
         title: modelData.model
         subtitle: modelData.percent + "%" + (modelData.status === "recharging" ? " · charging" : "") + " · " + modelData.source
+          + (modelData.seen && Date.now() - modelData.seen > 600000 ? " · last seen " + Qt.formatTime(new Date(modelData.seen), "h:mm AP") : "")
         CcLevelBar { level: modelData.percent / 100 }
       }
     }
