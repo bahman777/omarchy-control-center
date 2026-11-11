@@ -34,11 +34,34 @@ CcPage {
     var devs = UPower.devices ? UPower.devices.values : []
     for (var i = 0; i < devs.length; i++) {
       var d = devs[i]
-      if (!d || d.isLaptopBattery || !d.isPresent || d.type === UPowerDeviceType.LinePower || !d.model) continue
-      list.push({ model: String(d.model), percent: Math.round((d.percentage || 0) * 100) })
+      // A pen that has never reported (0%) is noise, not a dead battery.
+      if (!d || d.isLaptopBattery || !d.isPresent || d.type === UPowerDeviceType.LinePower || !d.model || !(d.percentage > 0)) continue
+      list.push({ model: String(d.model), percent: Math.round(d.percentage * 100), kind: "", source: "Bluetooth" })
     }
-    return list
+    return list.concat(logitech)
   }
+
+  // Logitech Unifying/Bolt receiver devices aren't Bluetooth and Linux exposes
+  // no battery for them; Solaar reads it over HID++ (takes a few seconds).
+  property var logitech: []
+  property bool solaarMissing: false
+  function refreshLogitech() {
+    cc.runner.run(["timeout", "20", "solaar", "show"], function(code, out) {
+      if (code === 127) { page.solaarMissing = true; return }
+      var list = [], cur = null
+      String(out).split("\n").forEach(function(l) {
+        var m = /^  (\d+): (.+)$/.exec(l)
+        if (m) { cur = { model: m[2].trim(), percent: -1, kind: "", status: "", source: "Logitech receiver" }; list.push(cur); return }
+        if (!cur) return
+        var k = /^\s+Kind\s*:\s*(\w+)/.exec(l)
+        if (k && !cur.kind) cur.kind = k[1]
+        var b = /Battery:\s*(\d+)%(?:,\s*BatteryStatus\.(\w+))?/.exec(l)
+        if (b && cur.percent < 0) { cur.percent = Number(b[1]); cur.status = (b[2] || "").toLowerCase() }
+      })
+      page.logitech = list.filter(function(d) { return d.percent >= 0 })
+    })
+  }
+  Timer { interval: 60000; running: true; repeat: true; triggeredOnStart: true; onTriggered: page.refreshLogitech() }
 
   function duration(sec) {
     if (!sec || sec <= 0) return ""
@@ -125,14 +148,7 @@ CcPage {
       iconColor: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery ? Color.urgent : Color.menu.text
       title: page.onBattery ? "On battery" : "Plugged in"
       subtitle: page.batteryText()
-      Rectangle {
-        width: Style.space(160); height: Style.space(8); radius: height / 2
-        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.12)
-        Rectangle {
-          width: parent.width * (page.hasBattery ? page.battery.percentage : 0); height: parent.height; radius: parent.radius
-          color: page.hasBattery && page.battery.percentage < 0.15 ? Color.urgent : Color.accent
-        }
-      }
+      CcLevelBar { level: page.hasBattery ? page.battery.percentage : 0; low: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery }
     }
     CcRow {
       visible: page.hasBattery && page.battery.healthSupported
@@ -148,9 +164,11 @@ CcPage {
       model: page.peripherals
       delegate: CcRow {
         required property var modelData
-        icon: Icons.bluetoothDevice(modelData.model.toLowerCase())
+        icon: modelData.kind === "mouse" ? Icons.mouse : modelData.kind === "keyboard" ? Icons.keyboard : Icons.bluetoothDevice(modelData.model.toLowerCase())
+        iconColor: modelData.percent <= 15 ? Color.urgent : Color.menu.text
         title: modelData.model
-        subtitle: modelData.percent + "%"
+        subtitle: modelData.percent + "%" + (modelData.status === "recharging" ? " · charging" : "") + " · " + modelData.source
+        CcLevelBar { level: modelData.percent / 100 }
       }
     }
   }

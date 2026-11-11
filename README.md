@@ -10,7 +10,7 @@ Click the status icons in the bar (network · Bluetooth · volume · battery) an
 
 - **Header:** battery, plus screenshot, settings, lock and power buttons. Power opens Suspend, Restart, Power Off and Log Out.
 - **Sliders:** volume, microphone and brightness. The chevron next to a slider picks the output or input device, so a headset is one click away.
-- **Toggles:** Wi-Fi, Wired, Bluetooth, Tailscale, VPN, Power Mode, Night Light, Do Not Disturb, Stay Awake, Airplane Mode, Window Layout, Printers and Scanners. Click a pill to switch it on or off. Click its chevron to open its menu in place: networks with inline password entry, Bluetooth devices with battery levels, Tailscale exit nodes, power modes, the Hyprland layout, printers (set the default, cancel jobs) and scanners (scan with Document Scanner).
+- **Toggles:** Wi-Fi, Wired, Bluetooth, Tailscale, VPN, Power Mode, Night Light, Do Not Disturb, Stay Awake, Airplane Mode, Screen Record, Reminders, Passwordless Sudo, Window Layout, Printers and Scanners. Click a pill to switch it on or off. Click its chevron to open its menu in place: networks with inline password entry, Bluetooth devices with battery levels, Tailscale exit nodes, power modes, the Hyprland layout, printers (set the default, cancel jobs), scanners (scan with Document Scanner), screen recording (region or full screen, with desktop audio, microphone or webcam), reminders (presets or custom, cancel one or all) and passwordless sudo (turn it off in place; turning it on goes through Omarchy's confirmation and password prompt in a terminal).
 
 **Every setting stays in the panel.** The ⚙ button, the battery chip and each menu's "… Settings" link open a settings page *inside* the panel, with a back button. Those pages are Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Power, Windows & Layout, Keyboard & Mouse, Appearance, Notifications and System, and a search box finds the right one. Only things that are real apps (screenshot, printer setup, the document scanner, nmtui) open a window, and the panel closes first so nothing is ever hidden behind it.
 
@@ -90,6 +90,7 @@ The plugin makes no network requests of its own. Wi-Fi, Bluetooth, sound, batter
 
 - Omarchy Quattro (4.x) with the Omarchy shell
 - NetworkManager (`nmcli`), `iproute2`, `brightnessctl`, `power-profiles-daemon`, `wl-clipboard`, `python3`. All ship with Omarchy
+- Optional: Solaar (`solaar`) to show Logitech Unifying/Bolt mouse and keyboard batteries
 - Optional: CUPS (`lpstat`, `system-config-printer`) for Printers, SANE (`scanimage`) and `simple-scan` for Scanners
 - Optional: `tailscale` for the Tailscale page (it offers to install Tailscale if missing)
 

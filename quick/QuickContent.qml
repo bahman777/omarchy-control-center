@@ -289,6 +289,58 @@ Item {
   property string defaultLayout: ""
   property string wsLayout: ""
 
+  // ================================================================ Recording / reminders / sudo
+  property bool recording: false
+  property bool recDesktopAudio: true
+  property bool recMic: false
+  property bool recWebcam: false
+  property var reminders: []
+  property bool sudoFree: false
+  property bool sudoBusy: false
+
+  function startRecording(fullscreen) {
+    var argv = ["omarchy-capture-screenrecording"]
+    if (fullscreen) argv.push("--fullscreen")
+    if (recDesktopAudio) argv.push("--with-desktop-audio")
+    if (recMic) argv.push("--with-microphone-audio")
+    if (recWebcam) argv.push("--with-webcam")
+    // Closes the panel first: the region picker and the recording need the screen.
+    qc.launch(argv, 250)
+  }
+  function stopRecording() {
+    recording = false
+    qc.runner.run(["omarchy-capture-screenrecording", "--stop-recording"], function() { q.refreshSlow() })
+  }
+  function addReminder(minutes, message) {
+    var m = Math.round(Number(minutes))
+    if (!isFinite(m) || m < 1 || m > 10080) { qc.toast("Minutes must be 1–10080"); return }
+    var argv = ["omarchy-reminder", String(m)]
+    var msg = String(message || "").replace(/[\x00-\x1f]/g, " ").trim().slice(0, 200)
+    if (msg !== "") argv.push(msg)
+    qc.runner.run(argv, function(code) {
+      q.qc.toast(code === 0 ? "Reminder set for " + m + " min" : "Could not set reminder")
+      q.refreshSlow()
+    })
+  }
+  function cancelReminder(timer) {
+    if (!/^omarchy-reminder-[A-Za-z0-9_.-]+\.timer$/.test(timer)) return
+    qc.runner.run(["systemctl", "--user", "stop", timer], function() { q.refreshSlow() })
+  }
+  function disableSudo() {
+    sudoBusy = true
+    // An active grant can be revoked without a password.
+    qc.runner.run(["omarchy-sudo-passwordless", "--disable"], function(code) {
+      q.sudoBusy = false
+      q.qc.toast(code === 0 ? "Passwordless sudo disabled" : "Could not disable passwordless sudo")
+      q.refreshSlow()
+    })
+  }
+  function enableSudo(duration) {
+    // Enabling stays in Omarchy's own flow: it shows the security warning and
+    // asks for your password in a terminal.
+    qc.launchTerminal("omarchy-sudo-passwordless " + duration)
+  }
+
   // ================================================================ Printers / scanners
   property var printers: []      // [{name, state, isDefault}]
   property var jobs: []          // [{id, user, size, when}]
@@ -307,6 +359,11 @@ Item {
       String(out).split("\n").forEach(function(l) { var f = l.split("\t"); if (!f[0]) return; list.push(f[0]); if (f[1] === "1") active = f[0] })
       q.profiles = list; q.profile = active
     })
+    qc.runner.run(["omarchy-capture-screenrecording", "--status"], function(code) { q.recording = code === 0 })
+    qc.runner.run(["omarchy-reminder", "show", "-j"], function(code, out) {
+      try { q.reminders = (JSON.parse(out).reminders || []).slice(0, 20) } catch (e) { q.reminders = [] }
+    })
+    qc.runner.run(["bash", "-c", "omarchy-sudo-passwordless --active"], function(code) { q.sudoFree = code === 0 })
     qc.runner.run(["omarchy-toggle-idle", "status"], function(code, out) {
       try { q.stayAwake = JSON.parse(out).enabled === true } catch (e) {}
     })
@@ -399,6 +456,13 @@ Item {
     list.push({ id: "dnd", icon: dnd === "on" ? Icons.bellOff : Icons.bell, title: "Do Not Disturb", subtitle: dnd === "" ? "Unavailable" : dnd === "on" ? "On" : "Off", active: dnd === "on", hasMenu: false })
     list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", subtitle: stayAwake ? "Screen stays on" : "Off", active: stayAwake, hasMenu: false })
     list.push({ id: "airplane", icon: String.fromCodePoint(0xF001D), title: "Airplane Mode", subtitle: airplane ? "On" : "Off", active: airplane, hasMenu: false })
+    list.push({ id: "record", icon: recording ? String.fromCodePoint(0xF044A) : String.fromCodePoint(0xF0A1C), title: "Screen Record",
+                subtitle: recording ? "Recording — click to stop" : "Off", active: recording, hasMenu: true })
+    list.push({ id: "reminders", icon: String.fromCodePoint(0xF0020), title: "Reminders",
+                subtitle: reminders.length ? reminders.length + " · next " + (reminders.slice().sort(function(a, b) { return a.remainingSeconds - b.remainingSeconds })[0].atTime || "") : "None set",
+                active: reminders.length > 0, hasMenu: true, menuOnly: true })
+    list.push({ id: "sudo", icon: String.fromCodePoint(0xF0FC5), title: "Passwordless Sudo",
+                subtitle: sudoFree ? "On — sudo asks no password" : "Off", active: sudoFree, hasMenu: true })
     list.push({ id: "layout", icon: Icons.windows, title: "Window Layout", subtitle: wsLayout ? wsLayout.charAt(0).toUpperCase() + wsLayout.slice(1) : "—", active: false, hasMenu: true })
     list.push({ id: "printers", icon: Icons.printer, title: "Printers",
                 subtitle: jobs.length ? jobs.length + (jobs.length === 1 ? " job" : " jobs") : (printers.filter(function(p) { return p.isDefault })[0] || {}).name || (printers.length ? printers.length + " printers" : "None"),
@@ -414,6 +478,9 @@ Item {
     if (!p || !p.id) return ""
     switch (p.id) {
     case "power": return "Switch between Balanced and Power Saver"
+    case "record": return p.active ? "Stop the recording" : "Record a region of the screen"
+    case "reminders": return "Set, see and cancel reminders"
+    case "sudo": return p.active ? "Require a password for sudo again" : "Let sudo run without a password for a while"
     case "layout": return "Cycle this workspace: dwindle → scrolling → floating"
     case "printers": return "Printers and print jobs"
     case "scanners": return "Find scanners and scan a document"
@@ -425,7 +492,8 @@ Item {
   }
   function menuTipFor(id) {
     return ({ wifi: "Networks", bluetooth: "Devices", tailscale: "Exit node", vpn: "VPN connections",
-              power: "Power modes", layout: "Window layout options" })[id] || ""
+              power: "Power modes", layout: "Window layout options", record: "Recording options",
+              sudo: "How long" })[id] || ""
   }
 
   readonly property var pillRows: {
@@ -468,6 +536,8 @@ Item {
       if (airplane) { Networking.wifiEnabled = true; qc.runner.run(["omarchy-bluetooth-power", "on"], null) }
       else { Networking.wifiEnabled = false; qc.runner.run(["omarchy-bluetooth-power", "off"], null) }
       break
+    case "record": if (recording) stopRecording(); else startRecording(false); break
+    case "sudo": if (sudoFree) disableSudo(); else toggleMenu("sudo"); break
     case "layout": qc.runner.run(["omarchy-hyprland-workspace-layout-toggle"], function() { q.refreshSlow() }); break
     }
   }
@@ -681,7 +751,10 @@ Item {
               : q.expanded === "power" ? powerMenu
               : q.expanded === "layout" ? layoutMenu
               : q.expanded === "printers" ? printerMenu
-              : q.expanded === "scanners" ? scannerMenu : null
+              : q.expanded === "scanners" ? scannerMenu
+              : q.expanded === "record" ? recordMenu
+              : q.expanded === "reminders" ? reminderMenu
+              : q.expanded === "sudo" ? sudoMenu : null
           }
         }
       }
@@ -1008,6 +1081,127 @@ Item {
         }
       }
       QsMenuItem { text: "Printer Settings"; separatorAbove: true; onClicked: q.qc.launch(["system-config-printer"], 0) }
+    }
+  }
+
+  Component {
+    id: recordMenu
+    QsMenu {
+      icon: String.fromCodePoint(0xF0A1C)
+      title: "Screen Recording"
+      active: q.recording
+      QsMenuItem { visible: q.recording; icon: String.fromCodePoint(0xF04DB); text: "Stop Recording"; onClicked: q.stopRecording() }
+      QsMenuItem { visible: !q.recording; icon: String.fromCodePoint(0xF0A1C); text: "Record a Region"; detail: "Drag to pick the area"; onClicked: q.startRecording(false) }
+      QsMenuItem { visible: !q.recording; icon: Icons.monitor; text: "Record the Full Screen"; onClicked: q.startRecording(true) }
+      QsMenuItem { visible: !q.recording; separatorAbove: true; icon: Icons.speaker; text: "Desktop Audio"; checked: q.recDesktopAudio; onClicked: q.recDesktopAudio = !q.recDesktopAudio }
+      QsMenuItem { visible: !q.recording; icon: Icons.microphone; text: "Microphone"; checked: q.recMic; onClicked: q.recMic = !q.recMic }
+      QsMenuItem { visible: !q.recording; icon: String.fromCodePoint(0xF0100); text: "Webcam Overlay"; checked: q.recWebcam; onClicked: q.recWebcam = !q.recWebcam }
+      QsMenuItem { separatorAbove: true; text: "Recordings Folder"; trailing: String.fromCodePoint(0xF03CC); tip: "Opens your videos folder"
+        onClicked: q.qc.launch(["xdg-open", Quickshell.env("OMARCHY_SCREENRECORD_DIR") || Quickshell.env("XDG_VIDEOS_DIR") || (Quickshell.env("HOME") + "/Videos")], 0) }
+    }
+  }
+
+  Component {
+    id: reminderMenu
+    QsMenu {
+      icon: String.fromCodePoint(0xF0020)
+      title: "Reminders"
+      active: q.reminders.length > 0
+      QsMenuItem { visible: q.reminders.length === 0; text: "No reminders set"; clickable: false; dim: true }
+      Repeater {
+        model: q.reminders
+        delegate: QsMenuItem {
+          required property var modelData
+          icon: String.fromCodePoint(0xF0954)
+          text: String(modelData.label || modelData.message || "Reminder")
+          detail: "at " + String(modelData.atTime || "") + " · in " + String(modelData.remaining || "")
+          trailing: String.fromCodePoint(0xF0156)
+          tip: "Cancel this reminder"
+          onClicked: q.cancelReminder(String(modelData.timer || ""))
+        }
+      }
+      Row {
+        width: parent ? parent.width : 0
+        spacing: Style.space(6)
+        topPadding: Style.space(6)
+        Repeater {
+          model: [5, 15, 30, 60]
+          delegate: Button {
+            required property var modelData
+            text: modelData < 60 ? modelData + " min" : "1 hour"
+            bordered: true
+            foreground: Color.menu.text
+            fontSize: Style.font.bodySmall
+            property bool ccFocusable: visible
+            function ccActivate() { clicked() }
+            onClicked: q.addReminder(modelData, reminderText.text)
+          }
+        }
+      }
+      Row {
+        width: parent ? parent.width : 0
+        spacing: Style.space(6)
+        topPadding: Style.space(6)
+        bottomPadding: Style.space(4)
+        TextField {
+          id: reminderText
+          width: parent.width - reminderMinutes.width - addBtn.width - Style.space(12)
+          placeholderText: "Message (optional)"
+          foreground: Color.menu.text
+          property bool ccFocusable: visible
+          property bool hasCursor: false
+          function ccActivate() { forceActiveFocus() }
+          Keys.onReturnPressed: addBtn.clicked()
+        }
+        TextField {
+          id: reminderMinutes
+          width: Style.space(64)
+          placeholderText: "min"
+          foreground: Color.menu.text
+          property bool ccFocusable: visible
+          property bool hasCursor: false
+          function ccActivate() { forceActiveFocus() }
+          Keys.onReturnPressed: addBtn.clicked()
+        }
+        Button {
+          id: addBtn
+          text: "Set"
+          bordered: true
+          foreground: Color.menu.text
+          fontSize: Style.font.bodySmall
+          property bool ccFocusable: visible
+          function ccActivate() { clicked() }
+          onClicked: {
+            if (reminderMinutes.text.trim() === "") { q.qc.toast("Enter minutes, or use a preset"); return }
+            q.addReminder(reminderMinutes.text.trim(), reminderText.text)
+            reminderText.text = ""; reminderMinutes.text = ""
+            q.qc.focusKeys()
+          }
+        }
+      }
+      QsMenuItem { visible: q.reminders.length > 1; separatorAbove: true; text: "Clear All Reminders"
+        onClicked: q.qc.runner.run(["omarchy-reminder", "clear"], function() { q.refreshSlow() }) }
+    }
+  }
+
+  Component {
+    id: sudoMenu
+    QsMenu {
+      icon: String.fromCodePoint(0xF0FC5)
+      title: "Passwordless Sudo"
+      active: q.sudoFree
+      QsMenuItem {
+        visible: q.sudoFree
+        icon: Icons.lock
+        text: "Require a Password Again"
+        detail: q.sudoBusy ? "Disabling…" : "Revoke the passwordless grant now"
+        onClicked: q.disableSudo()
+      }
+      QsMenuItem { visible: !q.sudoFree; text: "Allow any process run as you to use sudo without a password."; clickable: false; dim: true }
+      QsMenuItem { visible: !q.sudoFree; icon: Icons.clock; text: "For 15 Minutes"; trailing: String.fromCodePoint(0xF03CC); tip: "Confirms and asks for your password in a terminal"; onClicked: q.enableSudo("15") }
+      QsMenuItem { visible: !q.sudoFree; icon: Icons.clock; text: "For 1 Hour"; trailing: String.fromCodePoint(0xF03CC); tip: "Confirms and asks for your password in a terminal"; onClicked: q.enableSudo("60") }
+      QsMenuItem { visible: !q.sudoFree; icon: Icons.clock; text: "For 1 Day"; trailing: String.fromCodePoint(0xF03CC); tip: "Confirms and asks for your password in a terminal"; onClicked: q.enableSudo("1440") }
+      QsMenuItem { visible: !q.sudoFree; icon: String.fromCodePoint(0xF0026); text: "Permanently"; detail: "Weakens security until you turn it off"; trailing: String.fromCodePoint(0xF03CC); tip: "Confirms and asks for your password in a terminal"; onClicked: q.enableSudo("permanent") }
     }
   }
 
