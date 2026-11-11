@@ -194,7 +194,7 @@ CcPage {
     visible: page.running
     title: "Machines"
     subtitle: page.peers.filter(function(p) { return p.online }).length + " of " + page.peers.length + " online · click to copy the IP, right-click to send files"
-    header: [ CcButton { text: "Admin console"; onClicked: page.cc.runner.detach(["omarchy-launch-browser", "https://login.tailscale.com/admin/machines"]) } ]
+    header: [ CcButton { text: "Admin console"; onClicked: page.cc.launch(["omarchy-launch-browser", "https://login.tailscale.com/admin/machines"]) } ]
     Repeater {
       model: page.peers
       delegate: CcRow {
@@ -206,7 +206,7 @@ CcPage {
         dim: !modelData.online
         clickable: true
         onClicked: page.cc.copy(modelData.ip)
-        onRightClicked: page.cc.runner.detach(["omarchy-tailscale-send", modelData.host])
+        onRightClicked: page.cc.launch(["omarchy-tailscale-send", modelData.host])
         Rectangle {
           width: Style.space(8); height: width; radius: width / 2
           color: modelData.online ? "#3fb950" : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.3)

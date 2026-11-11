@@ -234,7 +234,7 @@ CcPage {
       subtitle: "~/.config/hypr/looknfeel.lua"
       clickable: true
       chevron: true
-      onClicked: page.cc.runner.detach(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/looknfeel.lua"])
+      onClicked: page.cc.launch(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/looknfeel.lua"])
     }
     CcRow {
       visible: page.h.lastError !== ""

@@ -207,7 +207,7 @@ CcPage {
       subtitle: "Positions and per-monitor rules live in ~/.config/hypr/monitors.lua"
       clickable: true
       chevron: true
-      onClicked: page.cc.runner.detach(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/monitors.lua"])
+      onClicked: page.cc.launch(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/monitors.lua"])
     }
   }
 }

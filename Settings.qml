@@ -62,10 +62,17 @@ Item {
     return shell && typeof shell.firstPartyServiceFor === "function" ? shell.firstPartyServiceFor(id) : null
   }
   function summon(id, payload) {
+    dismiss()
     if (shell && typeof shell.summon === "function") shell.summon(id, payload || "{}")
   }
+  // Anything that opens a real window closes this one first, so the new
+  // window is never hidden underneath it.
+  function launch(argv) {
+    dismiss()
+    runner.detach(argv)
+  }
   function launchTerminal(cmd) {
-    runner.detach(["omarchy-launch-floating-terminal-with-presentation", cmd])
+    launch(["omarchy-launch-floating-terminal-with-presentation", cmd])
   }
   function copy(text) {
     runner.run(["wl-copy", "--", String(text)], null)
@@ -115,6 +122,8 @@ Item {
   OverlayWindow {
     id: window
     shown: root.opened
+    // Top, not Overlay: Omarchy's polkit prompt, OSD and notifications stay above it.
+    shownLayer: WlrLayer.Top
     WlrLayershell.namespace: "control-center"
 
     Rectangle { anchors.fill: parent; color: Color.menu.scrim }

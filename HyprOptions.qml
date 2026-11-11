@@ -120,6 +120,9 @@ Item {
     id: stateFile
     path: root.statePath
     blockLoading: true
+    // The quick panel and the settings window each hold an instance.
+    watchChanges: true
+    onFileChanged: reload()
     printErrors: false
     atomicWrites: true
     onLoaded: {

@@ -206,7 +206,7 @@ CcPage {
     subtitle: "Click twice to confirm"
     CcRow {
       icon: Icons.lock; title: "Lock"; clickable: true
-      onClicked: { page.cc.dismiss(); page.cc.runner.detach(["omarchy-system-lock"]) }
+      onClicked: { page.cc.launch(["omarchy-system-lock"]) }
     }
     CcRow {
       icon: Icons.sleep; title: page.confirming === "suspend" ? "Click again to suspend" : "Suspend"; clickable: true

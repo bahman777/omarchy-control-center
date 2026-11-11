@@ -4,6 +4,27 @@ A GNOME Settings–style control center for [Omarchy](https://omarchy.org) Quatt
 
 ![Control Center](preview.png)
 
+## Quick Settings
+
+Click the status icons in the bar (network · Bluetooth · volume · battery) and a GNOME-style **Quick Settings** panel drops down from the bar. It is the same kind of panel as Omarchy's own bar menus, so it closes when you click elsewhere and never hides other windows.
+
+- **Header:** battery, plus screenshot, settings, lock and power buttons. Power opens Suspend, Restart, Power Off and Log Out.
+- **Sliders:** volume, microphone and brightness. The chevron next to a slider picks the output or input device, so a headset is one click away.
+- **Toggles:** Wi-Fi, Wired, Bluetooth, Tailscale, VPN, Power Mode, Night Light, Do Not Disturb, Stay Awake, Airplane Mode, Window Layout, Printers and Scanners. Click a pill to switch it on or off. Click its chevron to open its menu in place: networks with inline password entry, Bluetooth devices with battery levels, Tailscale exit nodes, power modes, the Hyprland layout, printers (set the default, cancel jobs) and scanners (scan with Document Scanner).
+
+Anything that opens a real window (settings, screenshot, printer setup, scanning) closes the panel first.
+
+```bash
+omarchy-shell control-center toggle          # open/close Quick Settings
+omarchy-shell control-center menu wifi       # open with a menu expanded (wifi, bluetooth, tailscale, vpn,
+                                             # power, layout, printers, scanners, outputs, inputs, session)
+omarchy-shell control-center settings sound  # open the full settings window on a page
+```
+
+Right-clicking the bar icons opens the full settings window. You may want to remove Omarchy's separate network, Bluetooth and audio icons from the bar (`omarchy bar` or Omarchy's bar settings), since the cluster replaces them.
+
+## Settings window
+
 | Page | What you can do |
 |---|---|
 | **Wi-Fi** | Turn Wi-Fi on/off, see visible networks with signal and security, connect (with password), disconnect and forget networks. Shows the current connection's IP, gateway, signal and band, lets you pin the band (2.4/5/6 GHz) and runs a speed test |
@@ -28,7 +49,7 @@ omarchy plugin add https://github.com/bahman777/omarchy-control-center --enable
 omarchy restart shell   # after updates, so the new QML is loaded
 ```
 
-This puts a gear in the bar. Left-click it to open the Control Center, or right-click to open straight to Wi-Fi.
+This adds the status-icon cluster to the right of the bar.
 
 To open it from a key binding or a script:
 
@@ -67,6 +88,7 @@ The plugin makes no network requests of its own. Wi-Fi, Bluetooth, sound, batter
 
 - Omarchy Quattro (4.x) with the Omarchy shell
 - NetworkManager (`nmcli`), `iproute2`, `brightnessctl`, `power-profiles-daemon`, `wl-clipboard`, `python3`. All ship with Omarchy
+- Optional: CUPS (`lpstat`, `system-config-printer`) for Printers, SANE (`scanimage`) and `simple-scan` for Scanners
 - Optional: `tailscale` for the Tailscale page (it offers to install Tailscale if missing)
 
 Some actions ask for your password through Omarchy's polkit prompt, such as changing DNS or the time zone, and Tailscale changes if your user isn't the Tailscale operator (`sudo tailscale set --operator=$USER` fixes that).
@@ -77,7 +99,8 @@ The plugin lives in `~/.config/omarchy/plugins/io.github.bahman777.control-cente
 
 ```
 manifest.json      plugin manifest (bar-widget + overlay)
-BarWidget.qml      gear icon in the bar
+BarWidget.qml      status icons in the bar + Quick Settings panel
+quick/             Quick Settings pills, menus, sliders
 Settings.qml       the window: sidebar, search, page host
 Runner.qml         argv-only process runner (no shell strings built from data)
 HyprOptions.qml    live Hyprland options + persistence
