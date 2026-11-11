@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.bahman777.control-center",
+  "name": "Control Center",
+  "version": "0.1.0",
+  "author": "bahman777",
+  "license": "MIT",
+  "description": "A GNOME Settings-style control center for Omarchy: Wi-Fi, network and Tailscale, Bluetooth, sound, displays, power, Hyprland windows and layout, input, appearance, and system info in one window.",
+  "kinds": [
+    "bar-widget",
+    "overlay"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "overlay": "Settings.qml"
+  },
+  "barWidget": {
+    "displayName": "Control Center",
+    "description": "Opens the Control Center settings window.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
