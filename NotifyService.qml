@@ -260,6 +260,80 @@ Scope {
       "-i", level <= 5 ? "battery-empty" : "battery-caution", "-t", critical ? "20000" : "10000", title, body])
   }
 
+  // ------------------------------------------------------------ calendar
+  // Events from tools/calendar.py (iCal links, cached for offline), refreshed
+  // every 15 minutes; the panel and the Calendar page read calData.
+  property var calData: ({ calendars: [], events: [], updated: 0 })
+  property bool calBusy: false
+  property var calQueued: null
+  property var calOnDone: null
+  Process {
+    id: calProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var o = null
+        try { o = JSON.parse(text) } catch (e) {}
+        if (o && o.events) svc.calData = o
+        var cb = svc.calOnDone; svc.calOnDone = null
+        if (cb) cb(o)
+      }
+    }
+    onExited: {
+      svc.calBusy = false
+      if (svc.calQueued) { var q = svc.calQueued; svc.calQueued = null; svc.calRun(q.args, q.done) }
+    }
+  }
+  function calRun(args, done) {
+    if (calProc.running) { calQueued = { args: args, done: done || null }; return }
+    calOnDone = done || null
+    calProc.command = ["python3", "-I", pluginDir + "/tools/calendar.py"].concat(args && args.length ? args : ["events"])
+    calBusy = true
+    calProc.running = true
+  }
+  Timer { interval: 900000; running: true; repeat: true; triggeredOnStart: true; onTriggered: svc.calRun(["events"]) }
+
+  // Reminder pop-up 10 minutes before each timed event (Join when it has a
+  // Meet/Zoom/Teams link). Sent once per event, remembered across restarts.
+  readonly property int remindLeadMs: 600000
+  property var reminded: ({})
+  FileView {
+    id: remindedFile
+    path: svc.stateDir + "/calendar-reminded.json"
+    printErrors: false
+    atomicWrites: true
+    onLoaded: { try { var o = JSON.parse(text()); if (o && typeof o === "object") svc.reminded = o } catch (e) {} }
+  }
+  Timer {
+    interval: 30000; running: true; repeat: true
+    onTriggered: {
+      var now = Date.now(), r = Object.assign({}, svc.reminded), changed = false
+      var cals = {}
+      ;(svc.calData.calendars || []).forEach(function(c) { cals[c.id] = c })
+      ;(svc.calData.events || []).forEach(function(e) {
+        if (e.allDay) return
+        var lead = e.start - now
+        if (lead > svc.remindLeadMs || lead < -60000) return
+        var key = e.cal + "|" + e.uid + "|" + e.start
+        if (r[key]) return
+        r[key] = e.start; changed = true
+        svc.sendEventReminder(e, Math.max(0, Math.round(lead / 60000)), (cals[e.cal] || {}).name || "")
+      })
+      for (var k in r) if (r[k] < now - 86400000) { delete r[k]; changed = true }
+      if (changed) { svc.reminded = r; remindedFile.setText(JSON.stringify(r) + "\n") }
+    }
+  }
+  function hm(ms) { return Qt.formatTime(new Date(ms), "h:mm AP") }
+  function sendEventReminder(e, mins, calName) {
+    var title = (mins <= 0 ? "Starting now: " : "In " + mins + " min: ") + e.title
+    var body = hm(e.start) + " – " + hm(e.end) + (e.location && !e.join ? " · " + e.location : "") + (calName ? " · " + calName : "")
+    var args = ["-a", "Calendar", "-u", "normal", "-t", "10000"]
+    if (e.join) args = args.concat(["-A", "join=Join"])
+    // With an action notify-send waits for the click; Join opens the link.
+    Quickshell.execDetached(["bash", "-c", 'j="$1"; shift; a=$(timeout 3600 notify-send "$@"); [ "$a" = join ] && [ -n "$j" ] && xdg-open "$j"',
+      "remind", e.join || ""].concat(args).concat([title, body]))
+  }
+
   // ------------------------------------------------------------ night light
   // "Sunset to sunrise" times drift with the seasons: re-apply once a day,
   // around midday, so a reload never undoes an evening on/off.
@@ -432,6 +506,13 @@ Scope {
     function dismissOne(): string { if (!svc.popupIds.length) return "none"; svc.dismiss(svc.popupIds[0]); return "ok" }
     function dismissAll(): string { svc.clearAll(); return "ok" }
     // Preview the battery alerts without waiting for a battery to drain.
+    // Preview a meeting reminder using the next event that has a join link.
+    function calendarPreview(): string {
+      var now = Date.now(), evs = (svc.calData.events || []).filter(function(e) { return !e.allDay && e.end > now })
+      var e = evs.filter(function(x) { return x.join })[0] || evs[0]
+      if (!e) return "no upcoming events"
+      svc.sendEventReminder(e, 10, ""); return "ok"
+    }
     function batteryPreview(): string { svc.sendBatteryAlert("Laptop", 9, 10, true, 1500); svc.sendBatteryAlert("Mobi Fold for Business", 14, 15, false, 0); return "ok" }
     function invokeLast(): string { if (!svc.rows.length) return "none"; svc.activate(svc.rows[0].id); return "ok" }
     function invokeAction(n: int): string {

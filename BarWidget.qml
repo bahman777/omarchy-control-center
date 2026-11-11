@@ -7,6 +7,7 @@ import Quickshell.Networking
 import Quickshell.Bluetooth
 import Quickshell.Services.Pipewire
 import Quickshell.Services.UPower
+import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Ui
 import "quick"
@@ -93,11 +94,18 @@ Panel {
   // Fixed order, left to right: notifications, network, Tailscale, Bluetooth,
   // sound, battery. Network, sound and battery are always shown; the others
   // only when they're on.
-  readonly property string glyphs: [notifGlyph, netGlyph, tsUp ? Icons.vpn : "",
+  // Music note while a player is playing (playerctld only mirrors others).
+  readonly property var playing: {
+    var ps = Mpris.players ? Mpris.players.values : []
+    for (var i = 0; i < ps.length; i++) if (ps[i] && ps[i].isPlaying && String(ps[i].dbusName || "").indexOf("playerctld") < 0) return ps[i]
+    return null
+  }
+  readonly property string glyphs: [playing ? Icons.music : "", notifGlyph, netGlyph, tsUp ? Icons.vpn : "",
     btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
     .filter(function(g) { return g !== "" }).join("  ")
   readonly property string statusTip: {
     var l = []
+    if (playing) l.push("Playing: " + [playing.trackTitle, playing.trackArtist].filter(function(x) { return x }).join(" — "))
     if (notifActive) l.push("Notifications: " + (notifService.dnd ? "Do Not Disturb" : notifService.count > 0 ? notifService.count + " unread" : "none"))
     l.push(wiredUp ? "Ethernet: connected" : !Networking.wifiEnabled ? "Wi-Fi: off" : wifiNet ? "Wi-Fi: " + (wifiNet.name || "connected") : "Wi-Fi: not connected")
     l.push("Tailscale: " + (tsUp ? "connected" : "off"))
@@ -146,6 +154,7 @@ Panel {
   // Settings pages open other pages through this (set by QuickContent).
   property var pageOpener: null
   property var nightToggle: null     // (on) → Night Light with your warmth/brightness
+  property real calendarDay: 0        // day the Calendar page opens on (0 = today)
   // Theme colours for the settings pages: Color isn't reliably available in
   // a page loaded through a cache-busting URL, so pages read these.
   readonly property color fg: Color.menu.text

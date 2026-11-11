@@ -14,6 +14,7 @@ var battery = g(0xF0079), batteryCharging = g(0xF0084), bolt = g(0xF140B), power
 var windows = g(0xF0574), keyboard = g(0xF030C), mouse = g(0xF037D), touchpad = g(0xF0322)
 var palette = g(0xF03D8), bell = g(0xF009A), bellOff = g(0xF009B), info = g(0xF02FC)
 var cog = g(0xF0493), lock = g(0xF033E), refresh = g(0xF0450), search = g(0xF0349)
+var calendar = g(0xF00ED), music = g(0xF0387)
 var check = g(0xF012C), close = g(0xF0156), phone = g(0xF011C), laptop = g(0xF0322)
 var computer = g(0xF0379), watch = g(0xF0597), gamepad = g(0xF0297), printer = g(0xF042A)
 var app = g(0xF003B), clock = g(0xF0954), translate = g(0xF05CA), harddisk = g(0xF02CA)

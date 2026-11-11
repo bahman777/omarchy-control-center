@@ -36,6 +36,22 @@ Notifications → **Use Quick Settings for notifications** makes the plugin your
 
 Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
 
+## Now Playing and Calendar
+
+- **Now Playing** (top of the panel, while a player is playing or paused): album cover, title and artist,
+  a progress bar you can click or drag to seek, previous / play-pause / next, and a switcher when several
+  MPRIS players are active. A music note appears in the bar while something plays.
+- **Today** (above the notifications): the next events still to come today, or tomorrow's once today is done,
+  in each calendar's colour; **Join** appears 15 minutes before a meeting with a Meet/Zoom/Teams link.
+- **Calendar page**: month grid with a dot per calendar, the chosen day's events, and your calendars
+  (rename, colour, hide, remove, add an iCal link). On first use it imports Dynamic Island's calendar links.
+- **Reminders**: a pop-up 10 minutes before each timed event, with Join when there's a meeting link.
+  Preview: `qs ipc --pid $(pgrep -n quickshell) call notifications calendarPreview`
+
+Links are kept in `~/.local/state/omarchy/control-center/calendars.json` (private, mode 600); feeds are cached
+in `~/.cache/omarchy-control-center/calendars` so events show offline. Needs `python-icalendar` and
+`python-recurring-ical-events`.
+
 ## Night Light
 
 The Night Light tile turns it on or off now; its arrow opens a menu with the schedule

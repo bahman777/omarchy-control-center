@@ -699,6 +699,9 @@ Item {
       QsMenuItem { icon: Icons.logout; text: "Log Out…"; separatorAbove: true; onClicked: q.qc.launch(["omarchy-system", "logout"], 150) }
     }
 
+    // ---------------------------------------------------- now playing
+    NowPlaying { id: nowPlaying }
+
     // ---------------------------------------------------- sliders
     Column {
       width: parent.width
@@ -842,6 +845,12 @@ Item {
           }
         }
       }
+    }
+
+    // ---------------------------------------------------- today
+    TodayEvents {
+      svc: q.notif
+      onOpenCalendar: function(dayMs) { q.qc.calendarDay = dayMs; q.openPage("calendar") }
     }
 
     // ---------------------------------------------------- notifications
