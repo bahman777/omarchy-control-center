@@ -397,7 +397,10 @@ Item {
       try { q.defaultLayout = JSON.parse(out).str || "" } catch (e) {}
     })
     qc.runner.run(["omarchy-hyprland-workspace-layout-current"], function(code, out) { q.wsLayout = String(out).trim() })
-    qc.runner.run(["lpstat", "-e"], function(code, names) {
+    // Installed printers only (lpstat -v), like the Printers & Scanners page.
+    // lpstat -e would also list every queue CUPS sees on the network,
+    // including ones shared for printers that no longer exist.
+    qc.runner.run(["sh", "-c", "lpstat -v 2>/dev/null | sed -n 's/^device for \\([^:]*\\):.*/\\1/p'"], function(code, names) {
       q.qc.runner.run(["lpstat", "-d", "-p"], function(c2, out) {
         var def = (/system default destination:\s*(\S+)/.exec(out) || [])[1] || ""
         var states = {}
@@ -473,7 +476,7 @@ Item {
                 subtitle: sudoFree ? "On — sudo asks no password" : "Off", active: sudoFree, hasMenu: true })
     list.push({ id: "layout", icon: Icons.windows, title: "Window Layout", subtitle: wsLayout ? wsLayout.charAt(0).toUpperCase() + wsLayout.slice(1) : "—", active: false, hasMenu: true })
     list.push({ id: "printers", icon: Icons.printer, title: "Printers",
-                subtitle: jobs.length ? jobs.length + (jobs.length === 1 ? " job" : " jobs") : (printers.filter(function(p) { return p.isDefault })[0] || {}).name || (printers.length ? printers.length + " printers" : "None"),
+                subtitle: jobs.length ? jobs.length + (jobs.length === 1 ? " job" : " jobs") : (printers.filter(function(p) { return p.isDefault })[0] || {}).name || (printers.length ? printers.length + (printers.length === 1 ? " printer" : " printers") : "None"),
                 active: jobs.length > 0, hasMenu: true, menuOnly: true })
     list.push({ id: "scanners", icon: String.fromCodePoint(0xF06AB), title: "Scanners",
                 subtitle: scanning ? "Searching…" : scannedOnce ? (scanners.length ? scanners.length + " found" : "None found") : "Scan a document",
@@ -1162,7 +1165,8 @@ Item {
           onClicked: q.qc.runner.run(["cancel", modelData.id], function() { q.refreshSlow() })
         }
       }
-      QsMenuItem { text: "Printer Settings"; separatorAbove: true; onClicked: q.qc.launch(["system-config-printer"], 0) }
+      QsMenuItem { icon: String.fromCodePoint(0xF0415); text: "Add a Printer…"; separatorAbove: true; onClicked: q.openPage("printers") }
+      QsMenuItem { text: "Printers & Scanners Settings"; onClicked: q.openPage("printers") }
     }
   }
 
@@ -1307,6 +1311,7 @@ Item {
       }
       QsMenuItem { icon: Icons.refresh; text: "Search Again"; separatorAbove: true; clickable: !q.scanning; onClicked: q.scanForScanners() }
       QsMenuItem { text: "Open Document Scanner"; onClicked: q.qc.launch(["simple-scan"], 0) }
+      QsMenuItem { icon: String.fromCodePoint(0xF0415); text: "Add a Scanner…"; onClicked: q.openPage("printers") }
     }
   }
 }

@@ -14,7 +14,7 @@ Rectangle {
   required property var svc
   property bool compact: false
   property bool popup: false
-  property bool showReply: row.hasReply
+  property bool showReply: row.hasReply && !popup
 
   // Keyboard cursor: the card itself runs its default action.
   property bool ccFocusable: visible
@@ -49,7 +49,7 @@ Rectangle {
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: card.row.hasDefault ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onContainsMouseChanged: if (card.popup) card.svc.hold(containsMouse)
+    onContainsMouseChanged: if (card.popup) card.svc.hover(card.row.id, containsMouse)
     onClicked: card.svc.activate(card.row.id)
   }
 
@@ -142,9 +142,17 @@ Rectangle {
 
     Flow {
       width: parent.width
-      visible: card.row.actions.length > 0
+      visible: card.row.actions.length > 0 || (card.popup && card.row.hasReply)
       spacing: Style.space(6)
       leftPadding: iconBox.width + Style.space(10)
+      Button {
+        visible: card.popup && card.row.hasReply
+        text: "Reply…"
+        bordered: true
+        foreground: card.fg
+        fontSize: Style.font.bodySmall
+        onClicked: { card.svc.hidePopup(card.row.id); Quickshell.execDetached(["omarchy-shell", "control-center", "settings", "notifications"]) }
+      }
       Repeater {
         model: card.row.actions
         delegate: Button {
@@ -173,7 +181,6 @@ Rectangle {
         property bool ccFocusable: visible
         property bool hasCursor: false
         function ccActivate() { forceActiveFocus() }
-        onActiveFocusChanged: if (card.popup) card.svc.hold(activeFocus)
         Keys.onReturnPressed: sendBtn.clicked()
       }
       Button {

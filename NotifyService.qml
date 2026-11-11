@@ -193,8 +193,16 @@ Scope {
   property var arrival: ({})        // id -> ms
   property var popupIds: []         // newest first
   property var popupUntil: ({})     // id -> ms (0 = until dismissed)
-  property bool held: false
-  function hold(on) { held = on }
+  // Hovering pauses only the pop-up under the pointer; leaving gives it a few
+  // more seconds. Nothing stays longer than maxLifeMs, hover or not.
+  property int hoverId: -1
+  readonly property int maxLifeMs: 30000
+  function hover(id, on) {
+    if (on) { hoverId = id; return }
+    if (hoverId !== id) return
+    hoverId = -1
+    var u = Object.assign({}, popupUntil); u[id] = Math.max(u[id] || 0, Date.now() + 2500); popupUntil = u
+  }
 
   LazyLoader {
     id: serverLoader
@@ -220,9 +228,14 @@ Scope {
     n.tracked = true
     var a = {}; for (var k in arrival) a[k] = arrival[k]; a[n.id] = Date.now(); arrival = a
     if (dnd && n.urgency !== NotificationUrgency.Critical) return
-    var secs = n.expireTimeout > 0 ? n.expireTimeout : 6
+    // Every pop-up times out (it stays in the panel's list until cleared).
+    // Senders give milliseconds (notify-send -t 8000); a value that large is
+    // read as ms. "Never" or none → 6 s; capped at 10 s; urgent ones get 15 s.
+    var t = Number(n.expireTimeout) || 0
+    if (t > 300) t = t / 1000
+    var secs = n.urgency === NotificationUrgency.Critical ? 15 : t > 0 ? Math.min(10, Math.max(3, t)) : 6
     var u = {}; for (var j in popupUntil) u[j] = popupUntil[j]
-    u[n.id] = n.urgency === NotificationUrgency.Critical ? 0 : Date.now() + secs * 1000
+    u[n.id] = Date.now() + secs * 1000
     popupUntil = u
     popupIds = [n.id].concat(popupIds.filter(function(x) { return x !== n.id })).slice(0, 4)
   }
@@ -269,8 +282,10 @@ Scope {
       for (var i = 0; i < svc.popupIds.length; i++) {
         var id = svc.popupIds[i], n = svc.byId(id)
         if (!n) continue
-        var until = svc.popupUntil[id]
-        if (until && now > until && !svc.held) {
+        var until = svc.popupUntil[id] || 0
+        var born = svc.arrival[id] || now
+        var paused = svc.hoverId === id && now - born < svc.maxLifeMs
+        if (now > until && !paused) {
           if (n.transient) n.expire()
           continue
         }
@@ -372,9 +387,10 @@ Scope {
     implicitHeight: Math.max(1, stack.implicitHeight)
     WlrLayershell.namespace: "control-center-notifications"
     WlrLayershell.layer: WlrLayer.Overlay
-    // Never take the keyboard on arrival: only while the pointer is over a
-    // pop-up (to type a reply) can it receive focus, and only on click.
-    WlrLayershell.keyboardFocus: svc.held ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    // Pop-ups never take the keyboard (and the mode is never switched at run
+    // time: that remaps the surface and loses hover/clicks). Replies are typed
+    // in the Quick Settings list instead.
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
     Column {
       id: stack
