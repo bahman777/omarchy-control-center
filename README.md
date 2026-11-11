@@ -25,6 +25,17 @@ omarchy-shell control-center settings sound  # open the panel on a settings page
 
 Right-clicking the bar icons opens the settings index. You may want to remove Omarchy's separate network, Bluetooth and audio icons from the bar (`omarchy bar` or Omarchy's bar settings), since the cluster replaces them.
 
+## Notification center
+
+Notifications → **Use Quick Settings for notifications** makes the plugin your notification daemon:
+
+- **Pop-ups:** at the top right, with the full multi-line text, the app's action buttons and an inline reply box when the app supports one. They pause while you hover.
+- **The panel:** the newest notifications sit under the toggles, with **Clear All**. The Notifications page lists every one, and you can act on, reply to or remove each.
+- **Do Not Disturb:** hides pop-ups. Notifications still collect, and critical ones still show.
+- **Omarchy's commands:** `omarchy-shell notifications …` works as before (dismiss, act, invoke action, toggle DND), so Omarchy's keybindings and `omarchy toggle notification silencing` keep working.
+
+Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
+
 ## Settings pages
 
 | Page | What you can do |

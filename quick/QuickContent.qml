@@ -453,7 +453,9 @@ Item {
                   title: "Power Mode", subtitle: profile === "power-saver" ? "Power Saver" : profile === "performance" ? "Performance" : "Balanced",
                   active: profile !== "balanced" && profile !== "", hasMenu: true })
     list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: nightOn ? "On" : "Off", active: nightOn, hasMenu: false })
-    list.push({ id: "dnd", icon: dnd === "on" ? Icons.bellOff : Icons.bell, title: "Do Not Disturb", subtitle: dnd === "" ? "Unavailable" : dnd === "on" ? "On" : "Off", active: dnd === "on", hasMenu: false })
+    var dndOn = notifActive ? notif.dnd : dnd === "on"
+    list.push({ id: "dnd", icon: dndOn ? Icons.bellOff : Icons.bell, title: "Do Not Disturb",
+                subtitle: !notifActive && dnd === "" ? "Unavailable" : dndOn ? "On" : "Off", active: dndOn, hasMenu: false })
     list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", subtitle: stayAwake ? "Screen stays on" : "Off", active: stayAwake, hasMenu: false })
     list.push({ id: "airplane", icon: String.fromCodePoint(0xF001D), title: "Airplane Mode", subtitle: airplane ? "On" : "Off", active: airplane, hasMenu: false })
     list.push({ id: "record", icon: recording ? String.fromCodePoint(0xF044A) : String.fromCodePoint(0xF0A1C), title: "Screen Record",
@@ -527,7 +529,10 @@ Item {
       nightOn = !nightOn
       qc.runner.run(["omarchy-toggle-nightlight"], function() { q.refreshSlow() })
       break
-    case "dnd": qc.runner.run(["omarchy-toggle-notification-silencing"], function() { q.refreshSlow() }); break
+    case "dnd":
+      if (notifActive) notif.setDnd(!notif.dnd)
+      else qc.runner.run(["omarchy-toggle-notification-silencing"], function() { q.refreshSlow() })
+      break
     case "awake":
       stayAwake = !stayAwake
       qc.runner.run(["omarchy-toggle-idle", stayAwake ? "stay-awake" : "allow-idle"], function() { q.refreshSlow() })
@@ -759,7 +764,76 @@ Item {
         }
       }
     }
+
+    // ---------------------------------------------------- notifications
+    Column {
+      width: parent.width
+      spacing: Style.space(8)
+      visible: !!q.notif
+
+      Item {
+        width: parent.width
+        height: Style.space(30)
+        Text {
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: q.notifActive ? (q.notif.count ? "Notifications  ·  " + q.notif.count : "No Notifications") : "Notifications"
+          color: q.fg
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.subtitle
+          font.weight: Font.DemiBold
+        }
+        Row {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(6)
+          Button {
+            visible: q.notifActive && q.notif.count > 0
+            text: "Clear All"
+            bordered: true
+            foreground: q.fg
+            fontSize: Style.font.bodySmall
+            property bool ccFocusable: visible
+            function ccActivate() { clicked() }
+            onClicked: q.notif.clearAll()
+          }
+        }
+      }
+
+      QsMenuItem {
+        visible: !q.notifActive
+        icon: Icons.bell
+        text: q.notif && q.notif.owner === "island" ? "Dynamic Island shows your notifications"
+          : q.notif && q.notif.owner === "starting" ? "Taking over notifications…" : "Omarchy shows your notifications"
+        detail: "Turn on the notification center to see, act on and reply to them here"
+        trailing: "\uf054"
+        onClicked: q.openPage("notifications")
+      }
+
+      Repeater {
+        model: q.notifActive ? q.notif.rows.slice(0, 3) : []
+        delegate: NotifCard {
+          required property var modelData
+          row: modelData
+          svc: q.notif
+          compact: true
+          width: parent ? parent.width : 0
+        }
+      }
+      QsMenuItem {
+        visible: q.notifActive && q.notif.count > 3
+        text: "Show All " + (q.notifActive ? q.notif.count : 0) + " Notifications"
+        trailing: "\uf054"
+        onClicked: q.openPage("notifications")
+      }
+    }
   }
+
+  // ================================================================ notifications
+  readonly property var notif: qc.notifService
+  readonly property bool notifActive: !!notif && notif.active
 
   // ================================================================ page view
   Column {

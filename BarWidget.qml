@@ -64,7 +64,18 @@ Panel {
     if (p >= 0.95) return Icons.battery
     return String.fromCodePoint(0xF007A + Math.max(0, Math.min(8, Math.floor(p * 10) - 1)))
   }
-  readonly property string glyphs: [netGlyph, btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
+  // The plugin's notification service (NotifyService.qml), once the shell has
+  // created it. Looked up on a timer: the shell's service map isn't a binding.
+  property var notifService: null
+  Timer {
+    interval: 1500; repeat: true; triggeredOnStart: true
+    running: root.notifService === null
+    onTriggered: if (root.shellApi && typeof root.shellApi.serviceFor === "function") root.notifService = root.shellApi.serviceFor(root.pluginId)
+  }
+  readonly property bool notifActive: !!notifService && notifService.active
+  readonly property string notifGlyph: !notifActive ? ""
+    : notifService.dnd ? Icons.bellOff : notifService.count > 0 ? String.fromCodePoint(0xF116B) : ""
+  readonly property string glyphs: [notifGlyph, netGlyph, btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
     .filter(function(g) { return g !== "" }).join("  ")
 
   // ------------------------------------------------------------ helpers for QuickContent
