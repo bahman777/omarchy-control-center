@@ -54,8 +54,14 @@ Item {
     if (req.indexOf("page:") === 0) { pageStack = []; openPage(req.slice(5)) }
     else { pageStack = []; expanded = req }
   }
-  Component.onCompleted: applyRequest(qc.menu)
-  Connections { target: q.qc; function onMenuChanged() { q.applyRequest(q.qc.menu) } }
+  Component.onCompleted: { qc.pageOpener = openPage; applyRequest(qc.menu) }
+  Connections {
+    target: q.qc
+    function onMenuChanged() { q.applyRequest(q.qc.menu) }
+    // A plain click on the bar always opens the main panel: no page or menu
+    // left over from last time (the shell may keep this content alive).
+    function onOpenedChanged() { if (q.qc.opened && !q.qc.menu) { q.pageStack = []; q.expanded = ""; q.resetCursor() } }
+  }
 
   // Esc: leave the page, then collapse the menu, then close the panel.
   function stepBack() {
@@ -1001,6 +1007,7 @@ Item {
         }
       }
       QsMenuItem { text: "All Networks"; separatorAbove: true; onClicked: q.openPage("wifi") }
+      QsMenuItem { text: "Devices on This Network"; onClicked: q.openPage("devices") }
     }
   }
 
@@ -1077,6 +1084,7 @@ Item {
         }
       }
       QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.openPage("network") }
+      QsMenuItem { text: "Devices on This Network"; onClicked: q.openPage("devices") }
     }
   }
 

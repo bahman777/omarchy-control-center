@@ -88,6 +88,17 @@ CcPage {
   }
 
   CcGroup {
+    CcRow {
+      icon: Icons.lan
+      title: "Devices on this network"
+      subtitle: "Everything connected to your LAN: computers, phones, printers, smart-home gear"
+      clickable: true
+      chevron: true
+      onClicked: page.cc.openPage("devices")
+    }
+  }
+
+  CcGroup {
     title: "Wired"
     subtitle: page.wired.length === 0 ? "No Ethernet adapter. USB and Thunderbolt adapters show up here when plugged in." : ""
     Repeater {

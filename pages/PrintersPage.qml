@@ -17,6 +17,11 @@ CcPage {
   property var saneDevices: []       // {device, label}
   property var netScanners: []       // discovered: {name, url, addr}
   property bool discovering: false
+  // Discovered printers/scanners checked one by one: uri/url -> "ready" | "offline" | "unreachable"
+  property var health: ({})
+  property var manualScanners: ({})  // name -> url, from sane-airscan's [devices]
+  property bool showOffline: false
+  function setHealth(key, v) { var h = Object.assign({}, health); h[key] = v; health = h }
   property bool scanningSane: false
   property string busy: ""
 
@@ -77,10 +82,77 @@ CcPage {
         }
       })
       page.netPrinters = Object.keys(printers).map(function(k) { return printers[k] })
+      page.netPrinters.forEach(function(n) { page.probePrinter(n.uri) })
       page.netScanners = Object.keys(scanners).map(function(k) { return scanners[k] })
       page.discovering = false
     })
   }
+
+  // A queue shared by another computer stays advertised after its printer is
+  // gone; the printer itself says "offline-report" or doesn't answer at all.
+  function probePrinter(uri) {
+    cc.runner.run(["timeout", "6", "ipptool", "-T", "5", "-tv", uri, "get-printer-attributes.test"], function(code, out) {
+      var o = String(out)
+      var v = !/printer-state \(enum\)/.test(o) ? "unreachable"
+        : /printer-state-reasons[^\n]*offline-report/.test(o) || /printer-state \(enum\) = stopped/.test(o) ? "offline" : "ready"
+      page.setHealth(uri, v)
+    })
+  }
+  function probeScanner(key, host, port) {
+    if (!/^[A-Za-z0-9.:\[\]-]+$/.test(host) || !/^\d+$/.test(String(port))) { setHealth(key, "unreachable"); return }
+    cc.runner.run(["timeout", "2", "bash", "-c", 'exec 3<>"/dev/tcp/$1/$2"', "probe", host, String(port)], function(code) {
+      page.setHealth(key, code === 0 ? "ready" : "unreachable")
+    })
+  }
+  function hostPort(url) {
+    var m = /^(https?):\/\/([^\/:]+)(?::(\d+))?/.exec(String(url))
+    return m ? { host: m[2], port: m[3] || (m[1] === "https" ? "443" : "80") } : null
+  }
+  function readAirscanConf() {
+    cc.runner.run(["cat", "/etc/sane.d/airscan.conf"], function(code, out) {
+      var inDev = false, m = {}
+      String(out).split("\n").forEach(function(l) {
+        var t = l.trim()
+        if (/^\[/.test(t)) { inDev = t === "[devices]"; return }
+        if (!inDev || t === "" || t[0] === "#" || t[0] === ";") return
+        var kv = /^"?([^"=]+?)"?\s*=\s*(\S+)/.exec(t)
+        if (kv) m[kv[1].trim()] = kv[2]
+      })
+      page.manualScanners = m
+    })
+  }
+  function removeScanner(name) {
+    var n = String(name)
+    if (!/^[A-Za-z0-9 _.-]+$/.test(n)) return
+    busy = n
+    // Deletes the `name = url` line (quoted or not) from [devices].
+    var esc = n.replace(/\./g, "\\.")
+    cc.runner.run(["pkexec", "sed", "-i", "-E", '/^\\s*"?' + esc + '"?\\s*=/d', "/etc/sane.d/airscan.conf"], function(code) {
+      page.busy = ""
+      page.cc.toast(code === 0 ? "Removed scanner " + n : "Scanner not removed")
+      page.readAirscanConf(); page.scanSane()
+    })
+  }
+  // One row per physical scanner: the escl and airscan backends often both
+  // find the same device. Each row knows its address and whether you added it.
+  readonly property var scanners: {
+    var seen = {}, out = []
+    saneDevices.forEach(function(d) {
+      var label = d.label.replace(/^eSCL\s+/, "")
+      var key = label.toLowerCase()
+      var manualName = d.device.indexOf("airscan:") === 0 ? d.device.split(":").slice(2).join(":") : ""
+      var url = manualScanners[manualName] || (d.device.indexOf("escl:") === 0 ? d.device.slice(5) : "")
+      var row = { device: d.device, label: label, url: url, manual: manualName !== "" && manualScanners[manualName] !== undefined ? manualName : "" }
+      if (seen[key] !== undefined) { if (row.manual && !out[seen[key]].manual) out[seen[key]] = row; return }
+      seen[key] = out.length; out.push(row)
+    })
+    return out
+  }
+  onScannersChanged: scanners.forEach(function(sc) {
+    var hp = hostPort(sc.url)
+    if (hp && health[sc.device] === undefined) probeScanner(sc.device, hp.host, hp.port)
+  })
+  function sharedBy(name) { var i = String(name).lastIndexOf(" @ "); return i > 0 ? String(name).slice(i + 3).replace(/\s*\(\d+\)$/, "") : "" }
 
   function scanSane() {
     scanningSane = true
@@ -95,12 +167,14 @@ CcPage {
     })
   }
 
-  Component.onCompleted: { refreshInstalled(); discover(); scanSane() }
+  Component.onCompleted: { refreshInstalled(); discover(); readAirscanConf(); scanSane() }
   Timer { interval: 5000; running: true; repeat: true; onTriggered: page.refreshInstalled() }
 
-  readonly property var newPrinters: netPrinters.filter(function(n) {
+  readonly property var notInstalled: netPrinters.filter(function(n) {
     return !printers.some(function(p) { return p.uri.indexOf(n.addr) >= 0 && p.uri.indexOf(n.rp) >= 0 })
   })
+  readonly property var newPrinters: notInstalled.filter(function(n) { var h = health[n.uri]; return h === undefined || h === "ready" })
+  readonly property var deadPrinters: notInstalled.filter(function(n) { var h = health[n.uri]; return h === "offline" || h === "unreachable" })
   readonly property var newScanners: netScanners.filter(function(n) {
     return !saneDevices.some(function(d) { return d.device.indexOf(n.addr) >= 0 })
   })
@@ -191,11 +265,33 @@ CcPage {
         required property var modelData
         icon: Icons.printer
         title: modelData.model
-        subtitle: modelData.name + " · " + modelData.addr
+        subtitle: (page.sharedBy(modelData.name) ? "Shared by " + page.sharedBy(modelData.name) : "Network printer")
+          + " · " + modelData.addr + (page.health[modelData.uri] === undefined ? " · checking…" : "")
         CcButton {
           text: page.busy === page.queueName(modelData.model) ? "Adding…" : "Add"
+          tooltipText: "Add this printer (asks for your password)"
           onClicked: page.addPrinter(modelData.model, modelData.uri)
         }
+      }
+    }
+    CcRow {
+      visible: page.deadPrinters.length > 0
+      title: page.deadPrinters.length + (page.deadPrinters.length === 1 ? " printer is" : " printers are") + " advertised but not working"
+      subtitle: "Usually a computer still sharing a printer that's gone"
+      clickable: true
+      chevron: true
+      tip: page.showOffline ? "Hide them" : "Show them"
+      onClicked: page.showOffline = !page.showOffline
+    }
+    Repeater {
+      model: page.showOffline ? page.deadPrinters : []
+      delegate: CcRow {
+        required property var modelData
+        dim: true
+        icon: Icons.printer
+        title: modelData.model
+        subtitle: (page.health[modelData.uri] === "offline" ? "Reported offline" : "Not answering")
+          + (page.sharedBy(modelData.name) ? " by " + page.sharedBy(modelData.name) : "") + " · " + modelData.addr
       }
     }
     CcRow {
@@ -204,7 +300,7 @@ CcPage {
       TextField {
         id: addr
         width: Style.space(200)
-        placeholderText: "192.168.1.50"
+        placeholderText: "e.g. 192.168.1.50"
         foreground: Color.menu.text
         property bool ccFocusable: visible
         property bool hasCursor: false
@@ -236,19 +332,29 @@ CcPage {
   CcGroup {
     title: "Scanners"
     subtitle: page.scanningSane ? "Looking for scanners (network ones take a few seconds)…"
-      : page.saneDevices.length ? "Click one to scan a document" : "No scanners found"
+      : page.scanners.length ? "Click one to scan a document" : "No scanners found"
     header: [ CcButton { text: page.scanningSane ? "Searching…" : "Search again"; onClicked: if (!page.scanningSane) page.scanSane() } ]
     Repeater {
-      model: page.saneDevices
+      model: page.scanners
       delegate: CcRow {
         required property var modelData
+        readonly property bool dead: page.health[modelData.device] === "unreachable"
+        readonly property var hp: page.hostPort(modelData.url)
+        dim: dead
         icon: page.scannerIcon
         title: modelData.label
-        subtitle: modelData.device.split(":")[0] + " · " + modelData.device.slice(modelData.device.indexOf(":") + 1)
-        clickable: true
-        external: true
-        tip: "Scan with Document Scanner"
+        subtitle: (dead ? "Not reachable" : hp ? "Network scanner" : "Found automatically")
+          + (hp ? " · " + hp.host : "") + (modelData.manual ? " · added by hand" : "")
+        clickable: !dead
+        external: !dead
+        tip: dead ? "" : "Scan with Document Scanner"
         onClicked: page.cc.launch(["simple-scan", modelData.device], 0)
+        CcButton {
+          visible: modelData.manual !== ""
+          text: page.busy === modelData.manual ? "Removing…" : "Remove"
+          tooltipText: "Remove this scanner (asks for your password)"
+          onClicked: page.removeScanner(modelData.manual)
+        }
       }
     }
   }

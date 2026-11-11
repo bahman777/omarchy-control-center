@@ -35,7 +35,7 @@ Panel {
       var d = netDevices[i]
       if (!d || d.type !== DeviceType.Wifi || !d.networks) continue
       var nets = d.networks.values
-      for (var j = 0; j < nets.length; j++) if (nets[j] && nets[j].connected) return { signal: nets[j].signalStrength || 0 }
+      for (var j = 0; j < nets.length; j++) if (nets[j] && nets[j].connected) return { signal: nets[j].signalStrength || 0, name: nets[j].name || "" }
     }
     return null
   }
@@ -73,10 +73,39 @@ Panel {
     onTriggered: if (root.shellApi && typeof root.shellApi.serviceFor === "function") root.notifService = root.shellApi.serviceFor(root.pluginId)
   }
   readonly property bool notifActive: !!notifService && notifService.active
+  // Bell: always there while Quick Settings handles notifications; a dot when
+  // something is unread, crossed out under Do Not Disturb.
   readonly property string notifGlyph: !notifActive ? ""
-    : notifService.dnd ? Icons.bellOff : notifService.count > 0 ? String.fromCodePoint(0xF116B) : ""
-  readonly property string glyphs: [notifGlyph, netGlyph, btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
+    : notifService.dnd ? Icons.bellOff : notifService.count > 0 ? String.fromCodePoint(0xF116B) : Icons.bell
+
+  // Tailscale: shown only while connected, like Bluetooth only while on.
+  property bool tsUp: false
+  Timer {
+    interval: 10000; running: true; repeat: true; triggeredOnStart: true
+    onTriggered: root.runner.run(["tailscale", "status", "--json", "--peers=false"], function(code, out) {
+      var up = false
+      try { up = code === 0 && JSON.parse(out).BackendState === "Running" } catch (e) {}
+      root.tsUp = up
+    })
+  }
+
+  // Fixed order, left to right: notifications, network, Tailscale, Bluetooth,
+  // sound, battery. Network, sound and battery are always shown; the others
+  // only when they're on.
+  readonly property string glyphs: [notifGlyph, netGlyph, tsUp ? Icons.vpn : "",
+    btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
     .filter(function(g) { return g !== "" }).join("  ")
+  readonly property string statusTip: {
+    var l = []
+    if (notifActive) l.push("Notifications: " + (notifService.dnd ? "Do Not Disturb" : notifService.count > 0 ? notifService.count + " unread" : "none"))
+    l.push(wiredUp ? "Ethernet: connected" : !Networking.wifiEnabled ? "Wi-Fi: off" : wifiNet ? "Wi-Fi: " + (wifiNet.name || "connected") : "Wi-Fi: not connected")
+    l.push("Tailscale: " + (tsUp ? "connected" : "off"))
+    l.push("Bluetooth: " + (!btOn ? "off" : btConnected ? "device connected" : "on"))
+    l.push("Volume: " + (muted ? "muted" : Math.round(vol * 100) + "%"))
+    if (hasBattery) l.push("Battery: " + Math.round(batt.percentage * 100) + "%")
+    l.push("Click: Quick Settings · Right-click: all settings")
+    return l.join("\n")
+  }
 
   // ------------------------------------------------------------ helpers for QuickContent
   // Request applied when the panel opens: a menu id ("wifi") or "page:<id>".
@@ -113,6 +142,9 @@ Panel {
   readonly property var shell: shellApi
   function summon(id, payload) { root.close(); summonPlugin(id, payload) }
   function dismiss() { root.close() }
+  // Settings pages open other pages through this (set by QuickContent).
+  property var pageOpener: null
+  function openPage(id) { if (pageOpener) pageOpener(id) }
   function launchTerminal(cmd) { launch(["omarchy-launch-floating-terminal-with-presentation", cmd], 0) }
   property string toastText: ""
   function toast(text) { toastText = String(text); toastTimer.restart() }
@@ -147,7 +179,7 @@ Panel {
     fontSize: Style.bar.iconFont
     active: root.opened
     useActiveColor: false
-    tooltipText: root.opened ? "" : "Quick Settings"
+    tooltipText: root.opened ? "" : root.statusTip
     onPressed: function(b) {
       if (b === Qt.RightButton) root.openSettings("index")
       else root.toggle()
