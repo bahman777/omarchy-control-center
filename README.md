@@ -36,6 +36,12 @@ Notifications → **Use Quick Settings for notifications** makes the plugin your
 
 Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
 
+## Keyboard
+
+- **Super + Ctrl + ,** opens or closes Quick Settings (Omarchy's "control notifications with the keyboard" binding).
+- **Super + Shift + Alt + ,** opens the notification list. Super + , acts on the newest pop-up, Super + Alt + ,
+  dismisses it, Super + Shift + , clears all, Super + Ctrl + Alt + , toggles Do Not Disturb.
+
 ## Now Playing and Calendar
 
 - **Now Playing** (top of the panel, while a player is playing or paused): album cover, title and artist,

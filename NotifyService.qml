@@ -523,7 +523,12 @@ Scope {
       svc.invoke(r.id, r.actions[n - 1].id)
       return "ok"
     }
-    function keyboard(): string { return "none" }
+    // Omarchy binds Super + Ctrl + , to this ("control notifications with the
+    // keyboard"): open or close Quick Settings, which is fully keyboard driven.
+    function keyboard(): string {
+      Quickshell.execDetached(["omarchy-shell", "control-center", "toggle"])
+      return "ok"
+    }
     function showHistory(): string {
       Quickshell.execDetached(["omarchy-shell", "control-center", "settings", "notifications"])
       return "ok"
