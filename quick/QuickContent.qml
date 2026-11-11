@@ -54,7 +54,11 @@ Item {
     if (req.indexOf("page:") === 0) { pageStack = []; openPage(req.slice(5)) }
     else { pageStack = []; expanded = req }
   }
-  Component.onCompleted: { qc.pageOpener = openPage; applyRequest(qc.menu) }
+  Component.onCompleted: {
+    qc.pageOpener = openPage
+    qc.nightToggle = function(on) { q.nightOn = on; q.nightApply(on) }
+    applyRequest(qc.menu)
+  }
   Connections {
     target: q.qc
     function onMenuChanged() { q.applyRequest(q.qc.menu) }
@@ -275,6 +279,45 @@ Item {
   // aren't exposed to bar widgets, and the CLIs keep the shell in sync.
   property bool stayAwake: false
   property bool nightOn: false
+  // Night Light schedule and look, from tools/nightlight.py (writes hyprsunset.conf).
+  property var nl: ({})
+  readonly property string nlTool: Qt.resolvedUrl("../tools/nightlight.py").toString().replace(/^file:\/\//, "").replace(/\?.*$/, "")
+  function refreshNight() {
+    qc.runner.run(["python3", "-I", nlTool, "status"], function(code, out) { try { q.nl = JSON.parse(out) } catch (e) {} })
+  }
+  function nightSet(args) {
+    // Optimistic: show the change now, then read back what was applied.
+    var n = Object.assign({}, nl)
+    args.forEach(function(a) { var i = a.indexOf("="); var k = a.slice(0, i), v = a.slice(i + 1); n[k] = k === "temp" || k === "dim" ? Number(v) : v })
+    nl = n
+    qc.runner.run(["python3", "-I", nlTool, "set"].concat(args), function(code, out) {
+      try { q.nl = JSON.parse(out) } catch (e) {}
+      q.refreshSlow()
+    })
+  }
+  // On/off now (the schedule takes over again at its next switch time).
+  function nightApply(on) {
+    var t = String(nl.temp || 4500), g = String(nl.dim || 100)
+    qc.runner.run(["bash", "-c",
+      'pgrep -x hyprsunset >/dev/null || { systemd-run --user --collect --quiet -- hyprsunset; sleep 1.5; }; '
+      + 'if [ "$1" = on ]; then hyprctl hyprsunset temperature "$2"; hyprctl hyprsunset gamma "$3"; '
+      + 'else hyprctl hyprsunset temperature 6500; hyprctl hyprsunset identity; hyprctl hyprsunset gamma 100; fi >/dev/null; omarchy-shell -q nightlight refresh',
+      "nl", on ? "on" : "off", t, g], function() { q.refreshSlow() })
+  }
+  function hm12(hm) {
+    var p = String(hm || "").split(":"); if (p.length < 2) return ""
+    var h = Number(p[0]), ap = h >= 12 ? "PM" : "AM"
+    return ((h % 12) || 12) + ":" + p[1] + " " + ap
+  }
+  function shiftTime(hm, mins) {
+    var p = String(hm || "0:00").split(":"), t = (Number(p[0]) * 60 + Number(p[1]) + mins + 1440) % 1440
+    return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2)
+  }
+  readonly property string nightSubtitle: {
+    var sched = nl.mode && nl.mode !== "manual" && nl.from
+    if (nightOn) return sched ? "On until " + hm12(nl.to) : "On"
+    return sched ? "Off · on at " + hm12(nl.from) : "Off"
+  }
   property string dnd: ""
 
   // ================================================================ Tailscale / VPN
@@ -376,6 +419,7 @@ Item {
     qc.runner.run(["omarchy-toggle-nightlight", "--status"], function(code, out) {
       try { q.nightOn = JSON.parse(out).enabled === true } catch (e) {}
     })
+    refreshNight()
     qc.runner.run(["omarchy-shell", "notifications", "isDnd"], function(code, out) {
       var s = String(out).trim(); q.dnd = code === 0 && (s === "on" || s === "off") ? s : ""
     })
@@ -461,7 +505,7 @@ Item {
       list.push({ id: "power", icon: profile === "power-saver" ? String.fromCodePoint(0xF032A) : profile === "performance" ? String.fromCodePoint(0xF04C5) : Icons.bolt,
                   title: "Power Mode", subtitle: profile === "power-saver" ? "Power Saver" : profile === "performance" ? "Performance" : "Balanced",
                   active: profile !== "balanced" && profile !== "", hasMenu: true })
-    list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: nightOn ? "On" : "Off", active: nightOn, hasMenu: false })
+    list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: nightSubtitle, active: nightOn, hasMenu: true })
     var dndOn = notifActive ? notif.dnd : dnd === "on"
     list.push({ id: "dnd", icon: dndOn ? Icons.bellOff : Icons.bell, title: "Do Not Disturb",
                 subtitle: !notifActive && dnd === "" ? "Unavailable" : dndOn ? "On" : "Off", active: dndOn, hasMenu: false })
@@ -536,7 +580,7 @@ Item {
     case "power": setProfile(profile === "balanced" ? "power-saver" : "balanced"); break
     case "night":
       nightOn = !nightOn
-      qc.runner.run(["omarchy-toggle-nightlight"], function() { q.refreshSlow() })
+      nightApply(nightOn)
       break
     case "dnd":
       if (notifActive) notif.setDnd(!notif.dnd)
@@ -763,6 +807,7 @@ Item {
               : q.expanded === "tailscale" ? tsMenu
               : q.expanded === "vpn" ? vpnMenu
               : q.expanded === "power" ? powerMenu
+              : q.expanded === "night" ? nightMenu
               : q.expanded === "layout" ? layoutMenu
               : q.expanded === "printers" ? printerMenu
               : q.expanded === "scanners" ? scannerMenu
@@ -1088,6 +1133,119 @@ Item {
       }
       QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.openPage("network") }
       QsMenuItem { text: "Devices on This Network"; onClicked: q.openPage("devices") }
+    }
+  }
+
+  Component {
+    id: nightMenu
+    QsMenu {
+      icon: Icons.nightlight
+      title: "Night Light"
+      QsMenuItem {
+        text: "Sunset to sunrise"
+        detail: q.nl.hasLocation ? q.hm12(q.nl.sunset) + " – " + q.hm12(q.nl.sunrise) + " at your location" : "Needs your location (none saved yet)"
+        checked: q.nl.mode === "sun"
+        clickable: !!q.nl.hasLocation
+        dim: !q.nl.hasLocation
+        onClicked: q.nightSet(["mode=sun"])
+      }
+      QsMenuItem {
+        text: "Custom hours"
+        detail: q.hm12(q.nl.start) + " – " + q.hm12(q.nl.end)
+        checked: q.nl.mode === "custom"
+        onClicked: q.nightSet(["mode=custom"])
+      }
+      QsMenuItem {
+        text: "No schedule"
+        detail: "Only when you turn it on here"
+        checked: q.nl.mode === "manual"
+        onClicked: q.nightSet(["mode=manual"])
+      }
+      Repeater {
+        model: q.nl.mode === "custom" ? [{ k: "start", t: "Turns on" }, { k: "end", t: "Turns off" }] : []
+        delegate: Item {
+          required property var modelData
+          width: parent ? parent.width : 0
+          height: Style.space(40)
+          Text {
+            anchors.left: parent.left
+            anchors.leftMargin: Style.space(10)
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.t
+            color: Color.menu.text
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.font.body
+          }
+          Row {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(6)
+            QsRoundButton {
+              width: Style.space(30)
+              icon: String.fromCodePoint(0xF0374)
+              tip: "30 minutes earlier"
+              onClicked: q.nightSet([modelData.k + "=" + q.shiftTime(q.nl[modelData.k], -30)])
+            }
+            Text {
+              width: Style.space(78)
+              anchors.verticalCenter: parent.verticalCenter
+              horizontalAlignment: Text.AlignHCenter
+              text: q.hm12(q.nl[modelData.k])
+              color: Color.menu.text
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.body
+              font.bold: true
+            }
+            QsRoundButton {
+              width: Style.space(30)
+              icon: String.fromCodePoint(0xF0415)
+              tip: "30 minutes later"
+              onClicked: q.nightSet([modelData.k + "=" + q.shiftTime(q.nl[modelData.k], 30)])
+            }
+          }
+        }
+      }
+      Text {
+        leftPadding: Style.space(10)
+        topPadding: Style.space(8)
+        text: "Warmth: " + (q.nl.temp || 4500) + " K"
+        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+      QsSlider {
+        width: parent ? parent.width : 0
+        icon: String.fromCodePoint(0xF050F)
+        iconTip: "Warmth"
+        value: (6000 - (q.nl.temp || 4500)) / 3500
+        valueTip: "Warmth " + (q.nl.temp || 4500) + " K (lower is warmer)"
+        onCommitted: function(v) {
+          var t = Math.round((6000 - v * 3500) / 100) * 100
+          q.nightSet(["temp=" + t])
+          if (q.nightOn) q.qc.runner.run(["hyprctl", "hyprsunset", "temperature", String(t)], null)
+        }
+      }
+      Text {
+        leftPadding: Style.space(10)
+        topPadding: Style.space(8)
+        text: "Brightness while on: " + (q.nl.dim || 100) + "%"
+        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+      QsSlider {
+        width: parent ? parent.width : 0
+        icon: Icons.brightness
+        iconTip: "Brightness while on"
+        value: ((q.nl.dim || 100) - 30) / 70
+        valueTip: "Brightness while on " + (q.nl.dim || 100) + "%"
+        onCommitted: function(v) {
+          var d = Math.round(30 + v * 70)
+          q.nightSet(["dim=" + d])
+          if (q.nightOn) q.qc.runner.run(["hyprctl", "hyprsunset", "gamma", String(d)], null)
+        }
+      }
+      QsMenuItem { text: "Display Settings"; separatorAbove: true; onClicked: q.openPage("displays") }
     }
   }
 

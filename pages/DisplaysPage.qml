@@ -180,8 +180,17 @@ CcPage {
       onToggled: {
         var n = {}; for (var k in page.nightlight) n[k] = page.nightlight[k]
         n.enabled = !n.enabled; page.nightlight = n
-        page.cc.runner.run(["omarchy-toggle-nightlight"], function() { refreshSoon.restart() })
+        if (page.cc.nightToggle) { page.cc.nightToggle(n.enabled); refreshSoon.restart() }
+        else page.cc.runner.run(["omarchy-toggle-nightlight"], function() { refreshSoon.restart() })
       }
+    }
+    CcRow {
+      icon: String.fromCodePoint(0xF0954)
+      title: "Night light schedule, warmth and brightness"
+      subtitle: "In the Night Light menu of Quick Settings"
+      clickable: true
+      chevron: true
+      onClicked: page.cc.showMenu("night")
     }
     CcSliderRow {
       visible: page.textSize > 0

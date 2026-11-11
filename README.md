@@ -36,6 +36,15 @@ Notifications → **Use Quick Settings for notifications** makes the plugin your
 
 Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
 
+## Night Light
+
+The Night Light tile turns it on or off now; its arrow opens a menu with the schedule
+(**Sunset to sunrise** at your location, **Custom hours** in 30-minute steps, or **No schedule**),
+**Warmth** (2500–6000 K) and **Brightness while on**. The schedule is written to
+`~/.config/hypr/hyprsunset.conf` only after you change something there; your original is kept as
+`hyprsunset.conf.before-control-center`. Sunset/sunrise come from `/tmp/latlon.txt` or `~/tmp/latlon.txt`
+and are refreshed once a day around midday.
+
 ## Battery alerts
 
 Always on, whichever program shows your notifications:

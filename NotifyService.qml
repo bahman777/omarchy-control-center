@@ -260,6 +260,17 @@ Scope {
       "-i", level <= 5 ? "battery-empty" : "battery-caution", "-t", critical ? "20000" : "10000", title, body])
   }
 
+  // ------------------------------------------------------------ night light
+  // "Sunset to sunrise" times drift with the seasons: re-apply once a day,
+  // around midday, so a reload never undoes an evening on/off.
+  Timer {
+    interval: 3600000; running: true; repeat: true; triggeredOnStart: true
+    onTriggered: {
+      var h = new Date().getHours()
+      if (h >= 10 && h < 16) Quickshell.execDetached(["python3", "-I", svc.pluginDir + "/tools/nightlight.py", "apply"])
+    }
+  }
+
   // ------------------------------------------------------------ server
   property var arrival: ({})        // id -> ms
   property var popupIds: []         // newest first

@@ -144,6 +144,8 @@ Panel {
   function dismiss() { root.close() }
   // Settings pages open other pages through this (set by QuickContent).
   property var pageOpener: null
+  property var nightToggle: null     // (on) → Night Light with your warmth/brightness
+  function showMenu(id) { menu = ""; menu = id }
   function openPage(id) { if (pageOpener) pageOpener(id) }
   function launchTerminal(cmd) { launch(["omarchy-launch-floating-terminal-with-presentation", cmd], 0) }
   property string toastText: ""
