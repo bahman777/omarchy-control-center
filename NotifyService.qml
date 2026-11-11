@@ -106,11 +106,12 @@ Scope {
           "cc", markerPath])
       }
     } else {
-      // Only hand back what we took.
+      // Only hand back what we took — and if nothing else would show
+      // notifications (no Dynamic Island), give them back to Omarchy.
       Quickshell.execDetached(["sh", "-c",
-        "if [ -f \"$1\" ]; then omarchy-plugin-enable omarchy.notifications; rm -f \"$1\"; fi; "
+        "if [ -f \"$1\" ] || [ \"$4\" = none ]; then omarchy-plugin-enable omarchy.notifications; rm -f \"$1\"; fi; "
         + "if [ -f \"$2\" ]; then python3 -I \"$3\" true; rm -f \"$2\"; fi",
-        "cc", markerPath, islandMarkerPath, pluginDir + "/tools/island-notifications.py"])
+        "cc", markerPath, islandMarkerPath, pluginDir + "/tools/island-notifications.py", islandEntry ? "island" : "none"])
     }
   }
 
