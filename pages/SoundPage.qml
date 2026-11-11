@@ -168,7 +168,10 @@ CcPage {
       title: "Restart audio"
       subtitle: "Restart PipeWire and recover stuck USB audio devices"
       clickable: true
-      onClicked: page.cc.launchTerminal("omarchy-restart-audio")
+      onClicked: {
+        page.cc.toast("Restarting audio…")
+        page.cc.runner.run(["omarchy-restart-audio"], function(code) { page.cc.toast(code === 0 ? "Audio restarted" : "Audio restart failed") })
+      }
     }
   }
 }

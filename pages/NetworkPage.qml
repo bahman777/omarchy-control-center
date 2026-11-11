@@ -113,10 +113,12 @@ CcPage {
     }
   }
 
+  CcSpeedTest {}
+
   CcGroup {
     title: "VPN"
     subtitle: page.vpns.length === 0 ? "No VPN profiles in NetworkManager. Tailscale has its own page." : ""
-    header: [ CcButton { text: "Add…"; onClicked: page.cc.launchTerminal("nmtui edit") } ]
+    header: [ CcButton { text: "Add…"; tooltipText: "Opens nmtui in a terminal"; onClicked: page.cc.launchTerminal("nmtui edit") } ]
     Repeater {
       model: page.vpns
       delegate: CcSwitchRow {
@@ -167,11 +169,33 @@ CcPage {
       }
     }
     CcRow {
+      id: customDns
       title: "Custom DNS servers"
-      subtitle: "Set your own resolvers"
-      clickable: true
-      chevron: true
-      onClicked: page.cc.launchTerminal("omarchy-dns Custom")
+      subtitle: "Space-separated, e.g. 192.168.1.1 1.1.1.1"
+      readonly property bool valid: /^[0-9A-Fa-f:.,\s]+$/.test(dnsField.text) && dnsField.text.trim().length >= 7
+      TextField {
+        id: dnsField
+        width: Style.space(220)
+        placeholderText: page.dnsProvider === "Custom" ? page.dnsServers : "1.1.1.1 9.9.9.9"
+        foreground: Color.menu.text
+        Keys.onReturnPressed: applyDns.clicked()
+        property bool ccFocusable: visible
+        property bool hasCursor: false
+        function ccActivate() { forceActiveFocus() }
+      }
+      CcButton {
+        id: applyDns
+        text: "Apply"
+        onClicked: {
+          if (!customDns.valid) { page.cc.toast("Enter IP addresses only"); return }
+          // omarchy-dns reads the list on stdin and elevates itself.
+          page.cc.runner.runWithInput(["omarchy-dns", "Custom"], dnsField.text.trim() + "\n", function(code) {
+            page.cc.toast(code === 0 ? "Custom DNS set" : "Could not set custom DNS")
+            dnsField.text = ""
+            refreshSoon.restart()
+          })
+        }
+      }
     }
   }
 
@@ -183,7 +207,8 @@ CcPage {
       title: "Advanced connection editor"
       subtitle: "Static IPs, proxies, bonds and bridges in nmtui"
       clickable: true
-      chevron: true
+      external: true
+      tip: "Opens nmtui in a terminal"
       onClicked: page.cc.launchTerminal("nmtui")
     }
   }

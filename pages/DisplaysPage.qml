@@ -23,7 +23,6 @@ CcPage {
   property var trialNext: null
   property int countdown: 0
 
-  readonly property var night: cc.firstParty("omarchy.nightlight")
 
   function refresh() {
     cc.runner.run(["hyprctl", "monitors", "all", "-j"], function(code, out) {
@@ -177,11 +176,11 @@ CcPage {
       icon: Icons.nightlight
       title: "Night light"
       subtitle: "Warmer colors to reduce eye strain" + (page.nightlight.temperature ? " · " + page.nightlight.temperature + " K" : "")
-      checked: page.night ? page.night.enabled : !!page.nightlight.enabled
+      checked: !!page.nightlight.enabled
       onToggled: {
-        if (page.night) page.night.setNightlight(!page.night.enabled)
-        else page.cc.runner.run(["omarchy-toggle-nightlight"], null)
-        refreshSoon.restart()
+        var n = {}; for (var k in page.nightlight) n[k] = page.nightlight[k]
+        n.enabled = !n.enabled; page.nightlight = n
+        page.cc.runner.run(["omarchy-toggle-nightlight"], function() { refreshSoon.restart() })
       }
     }
     CcSliderRow {
@@ -206,7 +205,7 @@ CcPage {
       title: "Monitor configuration file"
       subtitle: "Positions and per-monitor rules live in ~/.config/hypr/monitors.lua"
       clickable: true
-      chevron: true
+      external: true
       onClicked: page.cc.launch(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/monitors.lua"])
     }
   }

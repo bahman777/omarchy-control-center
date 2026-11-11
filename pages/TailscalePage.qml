@@ -89,7 +89,7 @@ CcPage {
       icon: Icons.vpn
       title: "Tailscale is not installed"
       subtitle: "Install the mesh VPN service and its admin console web app"
-      CcButton { text: "Install"; onClicked: page.cc.launchTerminal("omarchy-install-service-tailscale") }
+      CcButton { text: "Install"; tooltipText: "Installs Tailscale in a terminal"; onClicked: page.cc.launchTerminal("omarchy-install-service-tailscale") }
     }
   }
 
@@ -194,7 +194,7 @@ CcPage {
     visible: page.running
     title: "Machines"
     subtitle: page.peers.filter(function(p) { return p.online }).length + " of " + page.peers.length + " online · click to copy the IP, right-click to send files"
-    header: [ CcButton { text: "Admin console"; onClicked: page.cc.launch(["omarchy-launch-browser", "https://login.tailscale.com/admin/machines"]) } ]
+    header: [ CcButton { text: "Admin console"; tooltipText: "Opens the Tailscale admin console in your browser"; onClicked: page.cc.launch(["omarchy-launch-browser", "https://login.tailscale.com/admin/machines"]) } ]
     Repeater {
       model: page.peers
       delegate: CcRow {

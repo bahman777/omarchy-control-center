@@ -14,7 +14,14 @@ CcPage {
   readonly property var battery: UPower.displayDevice
   readonly property bool hasBattery: !!battery && battery.isPresent && battery.isLaptopBattery !== false
   readonly property bool onBattery: UPower.onBattery
-  readonly property var idle: cc.firstParty("omarchy.idle")
+  // Stay awake lives in ~/.local/state/omarchy/indicators/stay-awake; the
+  // shell's idle service watches it, so the CLI keeps everything in sync.
+  property bool stayAwake: false
+  function refreshAwake() {
+    cc.runner.run(["omarchy-toggle-idle", "status"], function(code, out) {
+      try { page.stayAwake = JSON.parse(out).enabled === true } catch (e) {}
+    })
+  }
 
   property var profiles: []
   property string activeProfile: ""
@@ -65,9 +72,9 @@ CcPage {
     })
     cc.runner.run(["omarchy-toggle-enabled", "suspend-off"], function(code) { page.suspendHidden = code === 0 })
   }
-  Component.onCompleted: refreshProfiles()
+  Component.onCompleted: { refreshProfiles(); refreshAwake() }
   onOnBatteryChanged: refreshProfiles()
-  Timer { interval: 5000; running: true; repeat: true; onTriggered: page.refreshProfiles() }
+  Timer { interval: 4000; running: true; repeat: true; onTriggered: { page.refreshProfiles(); page.refreshAwake() } }
 
   // Idle timings live in shell.json, which the shell hot-reloads.
   FileView {
@@ -174,15 +181,18 @@ CcPage {
       icon: Icons.eye
       title: "Stay awake"
       subtitle: "Never dim, lock or start the screensaver while idle"
-      checked: page.idle ? page.idle.stayAwake : false
-      onToggled: if (page.idle) page.idle.setIdleEnabled(page.idle.stayAwake)
+      checked: page.stayAwake
+      onToggled: {
+        page.stayAwake = !page.stayAwake
+        page.cc.runner.run(["omarchy-toggle-idle", page.stayAwake ? "stay-awake" : "allow-idle"], function() { page.refreshAwake() })
+      }
     }
     CcChoiceRow {
       title: "Start screensaver after"
       useDropdown: true
       options: page.choiceFor(page.idleConfig.screensaver)
       value: String(page.idleConfig.screensaver || "")
-      dim: page.idle ? page.idle.stayAwake : false
+      dim: page.stayAwake
       onPicked: function(v) { page.setIdle("screensaver", v) }
     }
     CcChoiceRow {
@@ -190,7 +200,7 @@ CcPage {
       useDropdown: true
       options: page.choiceFor(page.idleConfig.lock)
       value: String(page.idleConfig.lock || "")
-      dim: page.idle ? page.idle.stayAwake : false
+      dim: page.stayAwake
       onPicked: function(v) { page.setIdle("lock", v) }
     }
     CcSwitchRow {

@@ -57,13 +57,13 @@ CcPage {
     CcRow {
       title: "Browse themes with previews"
       clickable: true
-      chevron: true
+      external: true
       onClicked: { page.cc.launch(["omarchy-theme-switcher"]) }
     }
     CcRow {
       title: "Install a theme from git"
       clickable: true
-      chevron: true
+      external: true
       onClicked: page.cc.launchTerminal("omarchy-theme-install")
     }
   }
@@ -75,7 +75,7 @@ CcPage {
       title: "Background"
       subtitle: "Pick from the current theme's backgrounds"
       CcButton { text: "Next"; onClicked: page.cc.runner.run(["omarchy-theme-bg-next"], null) }
-      CcButton { text: "Choose…"; onClicked: { page.cc.launch(["omarchy-theme-bg-switcher"]) } }
+      CcButton { text: "Choose…"; tooltipText: "Opens Omarchy's background picker"; onClicked: { page.cc.launch(["omarchy-theme-bg-switcher"]) } }
     }
   }
 

@@ -13,6 +13,7 @@ Item {
     Process {
       id: proc
       property var callback: null
+      property string input: ""
       property string out: ""
       property int code: -1
       property bool outDone: false
@@ -33,11 +34,19 @@ Item {
         onStreamFinished: { proc.out = text; proc.outDone = true; proc.finish() }
       }
       onExited: function(exitCode) { proc.code = exitCode; proc.exitDone = true; proc.finish() }
+      onStarted: if (proc.input !== "") { proc.write(proc.input); proc.stdinEnabled = false }
     }
   }
 
   function run(argv, cb) {
     var p = procComponent.createObject(root, { command: argv, callback: cb || null })
+    if (!p) return
+    p.running = true
+  }
+
+  // Like run(), feeding `input` on stdin (for prompts such as `omarchy-dns Custom`).
+  function runWithInput(argv, input, cb) {
+    var p = procComponent.createObject(root, { command: argv, callback: cb || null, input: String(input), stdinEnabled: true })
     if (!p) return
     p.running = true
   }

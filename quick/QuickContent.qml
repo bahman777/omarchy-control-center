@@ -265,8 +265,10 @@ Item {
   readonly property bool hasBattery: !!battery && battery.isPresent
   property var profiles: []
   property string profile: ""
-  readonly property var idle: qc.firstParty("omarchy.idle")
-  readonly property var night: qc.firstParty("omarchy.nightlight")
+  // Read through Omarchy's own commands: the shell's first-party services
+  // aren't exposed to bar widgets, and the CLIs keep the shell in sync.
+  property bool stayAwake: false
+  property bool nightOn: false
   property string dnd: ""
 
   // ================================================================ Tailscale / VPN
@@ -304,6 +306,12 @@ Item {
       var list = [], active = ""
       String(out).split("\n").forEach(function(l) { var f = l.split("\t"); if (!f[0]) return; list.push(f[0]); if (f[1] === "1") active = f[0] })
       q.profiles = list; q.profile = active
+    })
+    qc.runner.run(["omarchy-toggle-idle", "status"], function(code, out) {
+      try { q.stayAwake = JSON.parse(out).enabled === true } catch (e) {}
+    })
+    qc.runner.run(["omarchy-toggle-nightlight", "--status"], function(code, out) {
+      try { q.nightOn = JSON.parse(out).enabled === true } catch (e) {}
     })
     qc.runner.run(["omarchy-shell", "notifications", "isDnd"], function(code, out) {
       var s = String(out).trim(); q.dnd = code === 0 && (s === "on" || s === "off") ? s : ""
@@ -387,9 +395,9 @@ Item {
       list.push({ id: "power", icon: profile === "power-saver" ? String.fromCodePoint(0xF032A) : profile === "performance" ? String.fromCodePoint(0xF04C5) : Icons.bolt,
                   title: "Power Mode", subtitle: profile === "power-saver" ? "Power Saver" : profile === "performance" ? "Performance" : "Balanced",
                   active: profile !== "balanced" && profile !== "", hasMenu: true })
-    list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: night && night.enabled ? "On" : "Off", active: !!night && night.enabled, hasMenu: false })
+    list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: nightOn ? "On" : "Off", active: nightOn, hasMenu: false })
     list.push({ id: "dnd", icon: dnd === "on" ? Icons.bellOff : Icons.bell, title: "Do Not Disturb", subtitle: dnd === "" ? "Unavailable" : dnd === "on" ? "On" : "Off", active: dnd === "on", hasMenu: false })
-    list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", subtitle: idle && idle.stayAwake ? "Idle paused" : "Off", active: !!idle && idle.stayAwake, hasMenu: false })
+    list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", subtitle: stayAwake ? "Screen stays on" : "Off", active: stayAwake, hasMenu: false })
     list.push({ id: "airplane", icon: String.fromCodePoint(0xF001D), title: "Airplane Mode", subtitle: airplane ? "On" : "Off", active: airplane, hasMenu: false })
     list.push({ id: "layout", icon: Icons.windows, title: "Window Layout", subtitle: wsLayout ? wsLayout.charAt(0).toUpperCase() + wsLayout.slice(1) : "—", active: false, hasMenu: true })
     list.push({ id: "printers", icon: Icons.printer, title: "Printers",
@@ -447,9 +455,15 @@ Item {
       break
     }
     case "power": setProfile(profile === "balanced" ? "power-saver" : "balanced"); break
-    case "night": if (night) night.setNightlight(!night.enabled); break
+    case "night":
+      nightOn = !nightOn
+      qc.runner.run(["omarchy-toggle-nightlight"], function() { q.refreshSlow() })
+      break
     case "dnd": qc.runner.run(["omarchy-toggle-notification-silencing"], function() { q.refreshSlow() }); break
-    case "awake": if (idle) idle.setIdleEnabled(idle.stayAwake); break
+    case "awake":
+      stayAwake = !stayAwake
+      qc.runner.run(["omarchy-toggle-idle", stayAwake ? "stay-awake" : "allow-idle"], function() { q.refreshSlow() })
+      break
     case "airplane":
       if (airplane) { Networking.wifiEnabled = true; qc.runner.run(["omarchy-bluetooth-power", "on"], null) }
       else { Networking.wifiEnabled = false; qc.runner.run(["omarchy-bluetooth-power", "off"], null) }

@@ -84,13 +84,13 @@ CcPage {
           })
         }
       }
-      CcButton { text: "Update…"; onClicked: page.cc.launchTerminal("omarchy-update") }
+      CcButton { text: "Update…"; tooltipText: "Runs the update in a terminal"; onClicked: page.cc.launchTerminal("omarchy-update") }
     }
     CcRow {
       title: "Firmware"
       subtitle: "Update device firmware with fwupd"
       clickable: true
-      chevron: true
+      external: true
       onClicked: page.cc.launchTerminal("omarchy-update-firmware")
     }
   }

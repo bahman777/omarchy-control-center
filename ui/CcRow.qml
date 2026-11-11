@@ -14,6 +14,8 @@ Item {
   property bool selected: false
   property bool dim: false
   property bool chevron: false
+  // Marks rows that open a terminal or another app (and close the panel).
+  property bool external: false
   // Hairline above the row; off for the first row of a group.
   property bool separator: !row.Positioner.isFirstItem
   default property alias trailing: trail.data
@@ -118,15 +120,19 @@ Item {
 
   CcText {
     id: chev
-    visible: row.chevron
+    visible: row.chevron || row.external
     anchors.right: parent.right
     anchors.rightMargin: Style.spacing.rowPaddingX
     anchors.verticalCenter: parent.verticalCenter
-    text: ""
+    text: row.external ? String.fromCodePoint(0xF03CC) : "\uf054"
     color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
     font.family: Style.font.family
-    font.pixelSize: Style.font.caption
+    font.pixelSize: row.external ? Style.font.body : Style.font.caption
   }
 
-  PanelToolTip { visible: row.tip !== "" && (mouse.containsMouse || row.hasCursor); text: row.tip }
+  PanelToolTip {
+    readonly property string shown: row.tip !== "" ? row.tip : (row.external ? "Opens outside this panel" : "")
+    visible: shown !== "" && (mouse.containsMouse || row.hasCursor)
+    text: shown
+  }
 }

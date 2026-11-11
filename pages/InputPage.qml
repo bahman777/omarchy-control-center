@@ -50,7 +50,8 @@ CcPage {
       title: "Input sources"
       subtitle: (page.keyboard.keymap ? page.keyboard.keymap + " · " : "") + "layouts: " + (page.v("input:kb_layout", "") || page.keyboard.layout || "—")
       clickable: true
-      chevron: true
+      external: true
+      tip: "Choose keyboard layouts in a terminal"
       onClicked: page.cc.launchTerminal("omarchy-setup-keyboard")
     }
     CcRow {
@@ -58,7 +59,8 @@ CcPage {
       title: "Input methods"
       subtitle: "Japanese, Korean and Chinese typing"
       clickable: true
-      chevron: true
+      external: true
+      tip: "Set up input methods in a terminal"
       onClicked: page.cc.launchTerminal("omarchy-setup-input")
     }
     CcSliderRow {

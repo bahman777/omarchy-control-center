@@ -112,7 +112,6 @@ CcPage {
     visible: page.connected !== null
     title: "Current connection"
     header: [
-      CcButton { text: "Speed test"; onClicked: page.cc.summon("omarchy.speedtest", JSON.stringify({ connection: page.connected ? page.connected.ssid : "" })) },
       CcButton { text: "Disconnect"; onClicked: if (page.connected) page.act(page.connected.ssid, function(o) { o.disconnect() }) }
     ]
     CcRow {
@@ -145,6 +144,8 @@ CcPage {
       onPicked: function(v) { page.cc.runner.run(["omarchy-network-band", v], function() { page.refreshDetails() }) }
     }
   }
+
+  CcSpeedTest { visible: page.connected !== null }
 
   CcGroup {
     visible: page.enabled && page.wifiDevice !== null
@@ -225,7 +226,8 @@ CcPage {
       title: "Advanced network settings"
       subtitle: "Hidden networks, enterprise Wi-Fi and saved profiles in nmtui"
       clickable: true
-      chevron: true
+      external: true
+      tip: "Opens nmtui in a terminal"
       onClicked: page.cc.launchTerminal("nmtui")
     }
     CcRow {
@@ -233,7 +235,10 @@ CcPage {
       title: "Restart Wi-Fi"
       subtitle: "Unblock and restart the Wi-Fi service"
       clickable: true
-      onClicked: page.cc.launchTerminal("omarchy-restart-wifi")
+      onClicked: {
+        page.cc.toast("Restarting Wi-Fi…")
+        page.cc.runner.run(["omarchy-restart-wifi"], function(code) { page.cc.toast(code === 0 ? "Wi-Fi restarted" : "Wi-Fi restart failed") })
+      }
     }
   }
 }

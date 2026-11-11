@@ -233,7 +233,7 @@ CcPage {
       title: "Edit look & feel by hand"
       subtitle: "~/.config/hypr/looknfeel.lua"
       clickable: true
-      chevron: true
+      external: true
       onClicked: page.cc.launch(["omarchy-launch-editor", Quickshell.env("HOME") + "/.config/hypr/looknfeel.lua"])
     }
     CcRow {

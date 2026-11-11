@@ -43,6 +43,11 @@ CcPage {
 
   property var pending: ({})
 
+  function restartBluetooth() {
+    cc.toast("Restarting Bluetooth…")
+    cc.runner.run(["omarchy-restart-bluetooth"], function(code) { page.cc.toast(code === 0 ? "Bluetooth restarted" : "Bluetooth restart failed") })
+  }
+
   function act(row, action) {
     var p = {}; for (var k in pending) p[k] = pending[k]
     p[row.address] = action
@@ -77,7 +82,7 @@ CcPage {
       icon: Icons.bluetoothOff
       title: "No Bluetooth adapter"
       subtitle: "The adapter may be blocked or the service stopped"
-      CcButton { text: "Restart Bluetooth"; onClicked: page.cc.launchTerminal("omarchy-restart-bluetooth") }
+      CcButton { text: "Restart Bluetooth"; onClicked: page.restartBluetooth() }
     }
   }
 
@@ -150,7 +155,7 @@ CcPage {
       title: "Restart Bluetooth"
       subtitle: "Unblock the radio and restart the service"
       clickable: true
-      onClicked: page.cc.launchTerminal("omarchy-restart-bluetooth")
+      onClicked: page.restartBluetooth()
     }
   }
 }
