@@ -1,6 +1,6 @@
 # Quick Settings for Omarchy
 
-A GNOME Settings–style control center for [Omarchy](https://omarchy.org) Quattro, built as an Omarchy shell (Quickshell) plugin. Every common system setting in one window, showing what's on, what's available, and what you can change, and updating live as things change.
+GNOME-style Quick Settings for [Omarchy](https://omarchy.org) Quattro, built as an Omarchy shell (Quickshell) plugin. Click the status icons in the bar and every common system setting is in one panel: what is on, what is available, and what you can change, updating live as things change.
 
 ![Control Center](preview.png)
 
@@ -84,7 +84,7 @@ Wherever Omarchy has a command, the Control Center uses it (`omarchy-bluetooth-p
 
 **Idle timers** are written to `~/.config/omarchy/shell.json` (the `idle` section only), which the shell hot-reloads.
 
-The plugin makes no network requests of its own. Wi-Fi, Bluetooth, sound, battery and monitor state come from Quickshell's NetworkManager, BlueZ, PipeWire, UPower and Hyprland bindings, so the window updates as soon as something changes. Tailscale and a few other details are polled only while their page is open.
+The plugin makes no network requests of its own. Wi-Fi, Bluetooth, sound, battery and monitor state come from Quickshell's NetworkManager, BlueZ, PipeWire, UPower and Hyprland bindings, so the panel updates as soon as something changes. Tailscale and a few other details are polled only while their page is open.
 
 ## Requirements
 
