@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import QtQuick.Controls
 import Quickshell.Networking
 import Quickshell.Bluetooth
@@ -145,6 +146,68 @@ Panel {
   // Settings pages open other pages through this (set by QuickContent).
   property var pageOpener: null
   property var nightToggle: null     // (on) → Night Light with your warmth/brightness
+  // Theme colours for the settings pages: Color isn't reliably available in
+  // a page loaded through a cache-busting URL, so pages read these.
+  readonly property color fg: Color.menu.text
+  readonly property color accent: Color.accent
+  readonly property color urgent: Color.urgent
+
+  // ---- Identify displays: a big number and name on every screen for 4 s.
+  // Numbers follow the arrangement left to right, then top to bottom, the
+  // same numbering the Displays page and menu use.
+  property bool identifying: false
+  function displayNumber(name) {
+    var list = Quickshell.screens.slice().sort(function(a, b) { return a.x - b.x || a.y - b.y })
+    for (var i = 0; i < list.length; i++) if (list[i].name === name) return i + 1
+    return 0
+  }
+  function identifyDisplays() { root.close(); identifying = true; identifyTimer.restart() }
+  Timer { id: identifyTimer; interval: 4000; onTriggered: root.identifying = false }
+  Variants {
+    model: root.identifying ? Quickshell.screens : []
+    PanelWindow {
+      required property var modelData
+      screen: modelData
+      WlrLayershell.namespace: "control-center-identify"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      exclusionMode: ExclusionMode.Ignore
+      anchors { top: true; left: true }
+      margins { top: Style.space(60); left: Style.space(60) }
+      implicitWidth: idCard.width
+      implicitHeight: idCard.height
+      color: "transparent"
+      Rectangle {
+        id: idCard
+        width: Math.max(idNum.implicitWidth, idName.implicitWidth) + Style.space(64)
+        height: idNum.implicitHeight + idName.implicitHeight + Style.space(40)
+        radius: Style.space(18)
+        color: Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.92)
+        border.color: Color.accent
+        border.width: 3
+        Column {
+          anchors.centerIn: parent
+          Text {
+            id: idNum
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: String(root.displayNumber(modelData.name))
+            color: Color.accent
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.space(110)
+            font.bold: true
+          }
+          Text {
+            id: idName
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: (String(modelData.model || "") || modelData.name) + "  ·  " + modelData.name
+            color: Color.foreground
+            font.family: Style.font.menuFamily
+            font.pixelSize: Style.space(20)
+          }
+        }
+      }
+    }
+  }
   function showMenu(id) { menu = ""; menu = id }
   function openPage(id) { if (pageOpener) pageOpener(id) }
   function launchTerminal(cmd) { launch(["omarchy-launch-floating-terminal-with-presentation", cmd], 0) }
@@ -168,6 +231,7 @@ Panel {
     function open(): string { root.open(); return "open" }
     function close(): string { root.close(); return "closed" }
     function settings(page: string): string { root.openSettings(page); return "ok" }
+    function identify(): string { root.identifyDisplays(); return "ok" }
     // Open the panel with one menu expanded: wifi, bluetooth, tailscale, vpn,
     // power, layout, printers, scanners, outputs, inputs, session.
     function menu(id: string): string { root.menu = ""; root.menu = id; if (!root.opened) root.open(); return "open" }

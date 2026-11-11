@@ -114,23 +114,36 @@ function evalSnippet(key, value) {
 }
 
 // Monitor overrides: {"eDP-1": {mode: "2880x1800@120.00", position: "0x0", scale: 1.5}}.
+// A monitor is named by connector ("DP-1") or, for externals, by
+// "desc:<make model serial>" so it keeps its place whichever port it's in.
+// The name goes into generated Lua, so only plain printable text passes.
+function safeMonitorName(name) {
+  var n = String(name || "")
+  return /^[A-Za-z0-9._-]+$/.test(n) || /^desc:[A-Za-z0-9 ._()\/,+-]{1,120}$/.test(n)
+}
+
 function cleanMonitor(name, cfg) {
-  if (!/^[A-Za-z0-9._-]+$/.test(String(name || ""))) return null
+  if (!safeMonitorName(name)) return null
   cfg = cfg || {}
+  if (cfg.disabled === true) return { disabled: true }
   var mode = String(cfg.mode || "preferred")
   if (mode !== "preferred" && !/^\d{2,5}x\d{2,5}(@\d{1,3}(\.\d+)?)?$/.test(mode)) return null
   var position = String(cfg.position || "auto")
   if (position !== "auto" && !/^-?\d{1,5}x-?\d{1,5}$/.test(position)) return null
   var scale = Number(cfg.scale)
   if (!isFinite(scale) || scale < 0.25 || scale > 4) scale = 1
-  return { mode: mode, position: position, scale: Math.round(scale * 1000) / 1000 }
+  var out = { mode: mode, position: position, scale: Math.round(scale * 1000) / 1000 }
+  if (cfg.mirror && /^[A-Za-z0-9._-]+$/.test(String(cfg.mirror))) out.mirror = String(cfg.mirror)
+  return out
 }
 
 function monitorLua(name, cfg) {
   var c = cleanMonitor(name, cfg)
   if (!c) return ""
+  if (c.disabled) return "hl.monitor({ output = " + JSON.stringify(name) + ", disabled = true })"
   return "hl.monitor({ output = " + JSON.stringify(name) + ", mode = " + JSON.stringify(c.mode)
-    + ", position = " + JSON.stringify(c.position) + ", scale = " + c.scale + " })"
+    + ", position = " + JSON.stringify(c.position) + ", scale = " + c.scale
+    + (c.mirror ? ", mirror = " + JSON.stringify(c.mirror) : "") + " })"
 }
 
 function overridesFile(flat, monitors) {

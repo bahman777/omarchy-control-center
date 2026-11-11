@@ -130,7 +130,7 @@ for e in json.load(sys.stdin):
       TextField {
         width: Style.space(220)
         placeholderText: "Name, IP, vendor or service"
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         onTextChanged: page.filter = text
         property bool ccFocusable: visible
         property bool hasCursor: false
@@ -140,7 +140,7 @@ for e in json.load(sys.stdin):
     CcRow {
       visible: page.self !== ""
       icon: Icons.laptop
-      iconColor: Color.accent
+      iconColor: page.cc.accent
       title: "This computer"
       subtitle: page.self
     }

@@ -242,7 +242,18 @@ Item {
   onDefaultSinkChanged: sinkResolve.restart()
   Timer { id: sinkResolve; interval: 150; running: true
     onTriggered: q.qc.runner.run(["omarchy-audio-output-sink"], function(code, out) { q.volumeSinkName = String(out).trim() }) }
-  PwObjectTracker { objects: q.sinks.concat(q.sources) }
+  // Apps playing sound (per-app volume in the Sound menu).
+  readonly property var streams: pwNodes.filter(function(n) { return n && n.isStream && n.isSink && n.audio && !q.pwHidden(n) })
+  PwObjectTracker { objects: q.sinks.concat(q.sources).concat(q.expanded === "sound" ? q.streams : []) }
+  function streamName(n) {
+    var pr = n && n.properties ? n.properties : {}
+    return String(pr["application.name"] || nodeLabel(n) || "App")
+  }
+
+  // Displays, from Hyprland (for the Displays tile and menu).
+  property var displays: []
+  property string laptopName: ""
+  readonly property var displaysOn: displays.filter(function(m) { return !m.disabled })
   function nodeLabel(n) { return n ? String(n.description || n.nickname || n.name || "") : "" }
   function nodeIcon(n, input) {
     var s = (nodeLabel(n) + " " + String(n ? n.name : "")).toLowerCase()
@@ -399,6 +410,8 @@ Item {
 
   // ================================================================ refresh
   function refreshSlow() {
+    qc.runner.run(["hyprctl", "monitors", "all", "-j"], function(code, out) { try { q.displays = JSON.parse(out) } catch (e) {} })
+    if (!laptopName) qc.runner.run(["omarchy-hyprland-monitor-laptop"], function(code, out) { q.laptopName = String(out).trim() })
     qc.runner.run(["brightnessctl", "-m", "-c", "backlight"], function(code, out) {
       var f = String(out).trim().split(",")
       q.brightness = code === 0 && f.length >= 5 && Number(f[4]) > 0 ? Number(f[2]) / Number(f[4]) : -1
@@ -505,6 +518,13 @@ Item {
       list.push({ id: "power", icon: profile === "power-saver" ? String.fromCodePoint(0xF032A) : profile === "performance" ? String.fromCodePoint(0xF04C5) : Icons.bolt,
                   title: "Power Mode", subtitle: profile === "power-saver" ? "Power Saver" : profile === "performance" ? "Performance" : "Balanced",
                   active: profile !== "balanced" && profile !== "", hasMenu: true })
+    list.push({ id: "sound", icon: volumeIcon(), title: "Sound",
+                subtitle: volumeMuted ? "Muted" : (nodeLabel(volumeSink) || "No output"), active: !volumeMuted && !!volumeSink, hasMenu: true })
+    var mirroring = displays.some(function(m) { return m.mirrorOf && m.mirrorOf !== "none" })
+    list.push({ id: "display", icon: Icons.monitor, title: "Displays",
+                subtitle: displaysOn.length <= 1 ? (displaysOn.length && displaysOn[0].name === laptopName ? "Built-in only" : "1 display")
+                  : mirroring ? displaysOn.length + " displays · mirroring" : displaysOn.length + " displays",
+                active: displaysOn.length > 1, hasMenu: true, menuOnly: true })
     list.push({ id: "night", icon: Icons.nightlight, title: "Night Light", subtitle: nightSubtitle, active: nightOn, hasMenu: true })
     var dndOn = notifActive ? notif.dnd : dnd === "on"
     list.push({ id: "dnd", icon: dndOn ? Icons.bellOff : Icons.bell, title: "Do Not Disturb",
@@ -533,6 +553,8 @@ Item {
     if (!p || !p.id) return ""
     switch (p.id) {
     case "power": return "Switch between Balanced and Power Saver"
+    case "sound": return p.active ? "Mute sound" : "Unmute sound"
+    case "display": return "Displays, arrangement and mirroring"
     case "record": return p.active ? "Stop the recording" : "Record a region of the screen"
     case "reminders": return "Set, see and cancel reminders"
     case "sudo": return p.active ? "Require a password for sudo again" : "Let sudo run without a password for a while"
@@ -559,6 +581,7 @@ Item {
 
   function pillToggle(id) {
     switch (id) {
+    case "sound": if (volumeSink && volumeSink.audio) volumeSink.audio.muted = !volumeSink.audio.muted; break
     case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break
     case "wired": qc.runner.run(["nmcli", "device", wiredDevice.connected ? "disconnect" : "connect", String(wiredDevice.name)], null); break
     case "bluetooth": qc.runner.run(["omarchy-bluetooth-power", btOn ? "off" : "on"], null); break
@@ -808,6 +831,8 @@ Item {
               : q.expanded === "vpn" ? vpnMenu
               : q.expanded === "power" ? powerMenu
               : q.expanded === "night" ? nightMenu
+              : q.expanded === "sound" ? soundMenu
+              : q.expanded === "display" ? displayMenu
               : q.expanded === "layout" ? layoutMenu
               : q.expanded === "printers" ? printerMenu
               : q.expanded === "scanners" ? scannerMenu
@@ -1133,6 +1158,135 @@ Item {
       }
       QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.openPage("network") }
       QsMenuItem { text: "Devices on This Network"; onClicked: q.openPage("devices") }
+    }
+  }
+
+  Component {
+    id: soundMenu
+    QsMenu {
+      icon: Icons.speaker
+      title: "Sound"
+      Text {
+        leftPadding: Style.space(10)
+        topPadding: Style.space(2)
+        text: "Output"
+        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+      Repeater {
+        model: q.sinks.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, false) } })
+        delegate: QsMenuItem {
+          required property var modelData
+          icon: modelData.icon
+          text: modelData.label
+          checked: (q.defaultSink && q.defaultSink.id === modelData.id) || q.volumeSinkName === modelData.name
+          onClicked: q.qc.runner.run(["omarchy-audio-output-set-default", String(modelData.id), modelData.name], null)
+        }
+      }
+      QsMenuItem {
+        icon: q.volumeMuted ? String.fromCodePoint(0xF075F) : Icons.volume
+        text: q.volumeMuted ? "Unmute sound" : "Mute sound"
+        onClicked: if (q.volumeSink && q.volumeSink.audio) q.volumeSink.audio.muted = !q.volumeSink.audio.muted
+      }
+      Text {
+        leftPadding: Style.space(10)
+        topPadding: Style.space(10)
+        text: "Input"
+        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+      Repeater {
+        model: q.sources.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, true) } })
+        delegate: QsMenuItem {
+          required property var modelData
+          icon: modelData.icon
+          text: modelData.label
+          checked: q.defaultSource && q.defaultSource.id === modelData.id
+          onClicked: q.qc.runner.run(["omarchy-audio-input-set-default", String(modelData.id), modelData.name], null)
+        }
+      }
+      QsMenuItem {
+        readonly property bool micMuted: !!(q.defaultSource && q.defaultSource.audio && q.defaultSource.audio.muted)
+        visible: !!q.defaultSource
+        icon: micMuted ? Icons.microphoneOff : Icons.microphone
+        text: micMuted ? "Unmute microphone" : "Mute microphone"
+        onClicked: q.qc.runner.run(["omarchy-audio-input-mute"], null)
+      }
+      Text {
+        leftPadding: Style.space(10)
+        topPadding: Style.space(10)
+        text: "Apps"
+        color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+      QsMenuItem { visible: q.streams.length === 0; text: "Nothing is playing"; clickable: false; dim: true }
+      Repeater {
+        model: q.streams
+        delegate: QsSlider {
+          required property var modelData
+          width: parent ? parent.width : 0
+          icon: modelData.audio && modelData.audio.muted ? String.fromCodePoint(0xF075F) : Icons.app
+          value: modelData.audio ? modelData.audio.volume : 0
+          to: 1.5
+          muted: !!(modelData.audio && modelData.audio.muted)
+          iconTip: muted ? "Unmute " + q.streamName(modelData) : "Mute " + q.streamName(modelData)
+          valueTip: q.streamName(modelData) + " · " + Math.round(value * 100) + "%"
+          onIconClicked: if (modelData.audio) modelData.audio.muted = !modelData.audio.muted
+          onMoved: function(v) { if (modelData.audio) modelData.audio.volume = v }
+          onCommitted: function(v) { if (modelData.audio) modelData.audio.volume = v }
+        }
+      }
+      QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
+    }
+  }
+
+  Component {
+    id: displayMenu
+    QsMenu {
+      icon: Icons.monitor
+      title: "Displays"
+      Repeater {
+        model: q.displays.slice().sort(function(a, b) { return (a.disabled - b.disabled) || a.x - b.x || a.y - b.y }).map(function(m) {
+          return { name: m.name, label: m.name === q.laptopName ? "Built-in display" : ((String(m.make || "") + " " + String(m.model || "")).trim() || m.name),
+                   detail: m.disabled ? "Off" : (m.mirrorOf && m.mirrorOf !== "none" ? "Mirroring " + m.mirrorOf
+                     : Math.round(m.width / m.scale) + " × " + Math.round(m.height / m.scale) + " · " + Math.round(m.refreshRate) + " Hz · " + Math.round(m.scale * 100) + "%"),
+                   off: !!m.disabled }
+        })
+        delegate: QsMenuItem {
+          required property var modelData
+          icon: modelData.name === q.laptopName ? Icons.laptop : Icons.monitor
+          text: modelData.label
+          detail: modelData.detail + " · " + modelData.name
+          dim: modelData.off
+          tip: "Display settings"
+          onClicked: q.openPage("displays")
+        }
+      }
+      QsMenuItem {
+        visible: q.displays.length <= 1
+        text: "Plug in a display to extend or mirror"
+        detail: "It shows up here and on the Displays page"
+        clickable: false
+        dim: true
+      }
+      QsMenuItem {
+        visible: q.displays.length > 1 && q.laptopName !== ""
+        separatorAbove: true
+        text: "Mirror built-in display"
+        checked: q.displays.some(function(m) { return m.mirrorOf && m.mirrorOf !== "none" })
+        onClicked: q.qc.runner.run(["omarchy-hyprland-monitor-internal-mirror", "toggle"], function() { q.refreshSlow() })
+      }
+      QsMenuItem {
+        visible: q.displays.length > 1 && q.laptopName !== ""
+        text: "Use built-in display"
+        checked: q.displays.some(function(m) { return m.name === q.laptopName && !m.disabled })
+        onClicked: q.qc.runner.run(["omarchy-hyprland-monitor-internal", "toggle"], function() { q.refreshSlow() })
+      }
+      QsMenuItem { icon: Icons.monitor; text: "Identify Displays"; separatorAbove: true; onClicked: q.qc.identifyDisplays() }
+      QsMenuItem { text: "Arrange Displays…"; onClicked: q.openPage("displays") }
     }
   }
 

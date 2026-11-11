@@ -188,7 +188,7 @@ CcPage {
         id: dnsField
         width: Style.space(220)
         placeholderText: page.dnsProvider === "Custom" ? page.dnsServers : "1.1.1.1 9.9.9.9"
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         Keys.onReturnPressed: applyDns.clicked()
         property bool ccFocusable: visible
         property bool hasCursor: false

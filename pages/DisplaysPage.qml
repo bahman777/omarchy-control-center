@@ -17,10 +17,10 @@ CcPage {
   property int textSize: 0
   property var nightlight: ({})
 
-  // Pending "keep these settings?" state.
-  property string trialMonitor: ""
-  property var trialPrevious: null
-  property var trialNext: null
+  // Pending "keep these settings?" state: monitor key -> { prev, next }.
+  // Moving one display can push others, so a trial covers several.
+  property var trial: ({})
+  readonly property bool trialing: Object.keys(trial).length > 0
   property int countdown: 0
 
 
@@ -64,37 +64,146 @@ CcPage {
     if (list.length === 0) list.push({ value: modeOf(m), label: modeOf(m) })
     return list
   }
-  function currentCfg(m) { return { mode: modeOf(m), position: m.x + "x" + m.y, scale: m.scale } }
+  // Externals are saved by model ("desc:…") so they keep their place on any
+  // port; the built-in panel by connector.
+  function keyOf(m) {
+    var d = String(m.description || "").trim()
+    if (m.name !== page.laptop && /^[A-Za-z0-9 ._()\/,+-]{1,120}$/.test(d)) return "desc:" + d
+    return m.name
+  }
+  function mirrored(m) { return !!m.mirrorOf && m.mirrorOf !== "none" }
+  function currentCfg(m) {
+    if (m.disabled) return { disabled: true }
+    var c = { mode: modeOf(m), position: m.x + "x" + m.y, scale: m.scale }
+    if (mirrored(m)) c.mirror = String(m.mirrorOf)
+    return c
+  }
 
+  // changes: [{ m: hyprctl monitor, next: cfg }]
+  function tryMany(changes) {
+    var t = Object.assign({}, trial), any = false
+    changes.forEach(function(c) {
+      var k = page.keyOf(c.m)
+      if (!cc.hypr.setMonitor(k, c.next, false)) return
+      if (!t[k]) t[k] = { prev: page.currentCfg(c.m), next: null }
+      t[k].next = c.next
+      any = true
+    })
+    if (!any) return
+    trial = t; countdown = 15
+    refreshSoon.restart()
+  }
   function tryMonitor(m, change) {
     var prev = currentCfg(m)
     var next = { mode: change.mode || prev.mode, position: prev.position, scale: change.scale || prev.scale }
-    if (!cc.hypr.setMonitor(m.name, next, false)) return
-    trialMonitor = m.name; trialPrevious = prev; trialNext = next; countdown = 15
-    refreshSoon.restart()
+    if (prev.mirror) next.mirror = prev.mirror
+    tryMany([{ m: m, next: next }])
   }
   function keep() {
-    if (trialMonitor) cc.hypr.setMonitor(trialMonitor, trialNext, true)
-    trialMonitor = ""; countdown = 0
+    for (var k in trial) cc.hypr.setMonitor(k, trial[k].next, true)
+    trial = ({}); countdown = 0
     cc.toast("Display settings saved")
   }
   function revert() {
-    if (trialMonitor && trialPrevious) cc.hypr.setMonitor(trialMonitor, trialPrevious, false)
-    trialMonitor = ""; countdown = 0
+    for (var k in trial) cc.hypr.setMonitor(k, trial[k].prev, false)
+    trial = ({}); countdown = 0
     refreshSoon.restart()
+  }
+
+  // ------------------------------------------------------------ arrangement
+  // Displays that take part in the layout (not off, not mirroring), in logical
+  // pixels, numbered left to right then top to bottom (same as Identify).
+  readonly property var placed: {
+    var list = monitors.filter(function(m) { return !m.disabled && !page.mirrored(m) }).map(function(m) {
+      var rot = (Number(m.transform) || 0) % 2 === 1
+      var w = Math.round(m.width / (m.scale || 1)), h = Math.round(m.height / (m.scale || 1))
+      return { name: m.name, m: m, x: m.x, y: m.y, w: rot ? h : w, h: rot ? w : h,
+               label: m.name === page.laptop ? "Built-in" : (String(m.model || "") || m.name) }
+    })
+    list.sort(function(a, b) { return a.x - b.x || a.y - b.y })
+    list.forEach(function(p, i) { p.num = i + 1 })
+    return list
+  }
+  readonly property string mainName: {
+    for (var i = 0; i < placed.length; i++) if (placed[i].name === page.laptop) return page.laptop
+    return placed.length ? placed[0].name : ""
+  }
+  property string selected: ""
+  property string anchorName: ""
+  property string align: "center"
+  property string lastDir: ""
+  onSelectedChanged: lastDir = ""
+  function reapplyAlign() { if (lastDir) place(lastDir) }
+  readonly property var selectedPlaced: placedBy(selected)
+  readonly property string anchorEff: anchorName && anchorName !== selected && placedBy(anchorName) ? anchorName
+    : (mainName !== selected ? mainName : (placed.filter(function(p) { return p.name !== page.selected })[0] || {}).name || "")
+  function placedBy(name) { for (var i = 0; i < placed.length; i++) if (placed[i].name === name) return placed[i]; return null }
+  function overlaps(a, b) { return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h }
+
+  // Put the selected display left/right/above/below another one, push any
+  // display it now covers further the same way, then shift everything so the
+  // layout starts at 0,0 (negative positions upset some X11 apps).
+  function place(dir) {
+    var rects = placed.map(function(p) { return { name: p.name, m: p.m, x: p.x, y: p.y, w: p.w, h: p.h } })
+    function find(n) { for (var i = 0; i < rects.length; i++) if (rects[i].name === n) return rects[i]; return null }
+    var s = find(selected), a = find(anchorEff)
+    if (!s || !a || s === a) return
+    lastDir = dir
+    var horiz = dir === "left" || dir === "right"
+    if (dir === "right") s.x = a.x + a.w
+    if (dir === "left") s.x = a.x - s.w
+    if (dir === "below") s.y = a.y + a.h
+    if (dir === "above") s.y = a.y - s.h
+    if (horiz) s.y = align === "start" ? a.y : align === "end" ? a.y + a.h - s.h : a.y + Math.round((a.h - s.h) / 2)
+    else s.x = align === "start" ? a.x : align === "end" ? a.x + a.w - s.w : a.x + Math.round((a.w - s.w) / 2)
+    var moved = [s]
+    for (var pass = 0; pass < rects.length * 2; pass++) {
+      var bumped = false
+      moved.slice().forEach(function(mv) {
+        rects.forEach(function(o) {
+          if (o === mv || o === s || !page.overlaps(mv, o)) return
+          if (dir === "right") o.x = mv.x + mv.w
+          if (dir === "left") o.x = mv.x - o.w
+          if (dir === "below") o.y = mv.y + mv.h
+          if (dir === "above") o.y = mv.y - o.h
+          if (moved.indexOf(o) < 0) moved.push(o)
+          bumped = true
+        })
+      })
+      if (!bumped) break
+    }
+    var minX = Math.min.apply(null, rects.map(function(r) { return r.x }))
+    var minY = Math.min.apply(null, rects.map(function(r) { return r.y }))
+    var changes = []
+    rects.forEach(function(r) {
+      r.x -= minX; r.y -= minY
+      if (r.x === r.m.x && r.y === r.m.y) return
+      var next = page.currentCfg(r.m); next.position = r.x + "x" + r.y
+      changes.push({ m: r.m, next: next })
+    })
+    tryMany(changes)
+  }
+  function setEnabled(m, on) {
+    if (!on && placed.length <= 1 && !m.disabled) { cc.toast("That's the only display in use"); return }
+    tryMany([{ m: m, next: on ? { mode: "preferred", position: "auto", scale: 1 } : { disabled: true } }])
+  }
+  function setMirror(m, of) {
+    var next = { mode: modeOf(m), position: "auto", scale: m.scale }
+    if (of) next.mirror = of
+    tryMany([{ m: m, next: next }])
   }
   Timer {
     interval: 1000; repeat: true; running: page.countdown > 0
     onTriggered: { page.countdown--; if (page.countdown <= 0) page.revert() }
   }
-  Component.onDestruction: if (trialMonitor) revert()
+  Component.onDestruction: if (trialing) revert()
 
   // ------------------------------------------------------------ confirm bar
   CcGroup {
-    visible: page.trialMonitor !== ""
+    visible: page.trialing
     CcRow {
       icon: Icons.monitor
-      iconColor: Color.accent
+      iconColor: page.cc.accent
       title: "Keep these display settings?"
       subtitle: "Reverting in " + page.countdown + " s"
       CcButton { text: "Revert"; onClicked: page.revert() }
@@ -103,6 +212,110 @@ CcPage {
   }
 
   CcPersistBanner { hypr: page.cc.hypr }
+
+  CcGroup {
+    title: "Arrangement"
+    subtitle: page.placed.length > 1 ? "Click a display, then choose where it goes"
+      : "Plug in another display and it appears here to arrange"
+    header: [ CcButton { text: "Identify"; tooltipText: "Show each display's number on it"; onClicked: page.cc.identifyDisplays() } ]
+    Item {
+      id: canvas
+      width: parent ? parent.width : 0
+      height: Style.space(page.placed.length > 1 ? 210 : 150)
+      readonly property real pad: Style.space(18)
+      readonly property real minX: page.placed.length ? Math.min.apply(null, page.placed.map(function(p) { return p.x })) : 0
+      readonly property real minY: page.placed.length ? Math.min.apply(null, page.placed.map(function(p) { return p.y })) : 0
+      readonly property real spanW: page.placed.length ? Math.max.apply(null, page.placed.map(function(p) { return p.x + p.w })) - minX : 1
+      readonly property real spanH: page.placed.length ? Math.max.apply(null, page.placed.map(function(p) { return p.y + p.h })) - minY : 1
+      readonly property real k: Math.min((width - pad * 2) / Math.max(1, spanW), (height - pad * 2) / Math.max(1, spanH))
+      readonly property real offX: (width - spanW * k) / 2
+      readonly property real offY: (height - spanH * k) / 2
+      Repeater {
+        model: page.placed
+        delegate: Rectangle {
+          id: tile
+          required property var modelData
+          readonly property bool isSel: page.selected === modelData.name
+          x: canvas.offX + (modelData.x - canvas.minX) * canvas.k + 2
+          y: canvas.offY + (modelData.y - canvas.minY) * canvas.k + 2
+          width: modelData.w * canvas.k - 4
+          height: modelData.h * canvas.k - 4
+          radius: Style.space(6)
+          color: isSel ? Qt.rgba(page.cc.accent.r, page.cc.accent.g, page.cc.accent.b, 0.28) : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.10)
+          border.width: isSel ? 2 : 1
+          border.color: isSel ? page.cc.accent : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.35)
+          Behavior on x { NumberAnimation { duration: 160 } }
+          Behavior on y { NumberAnimation { duration: 160 } }
+          Column {
+            anchors.centerIn: parent
+            width: parent.width - Style.space(8)
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              text: String(tile.modelData.num)
+              color: tile.isSel ? page.cc.accent : page.cc.fg
+              font.family: Style.font.menuFamily
+              font.pixelSize: Math.max(14, Math.min(tile.height * 0.32, Style.space(40)))
+              font.bold: true
+            }
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              elide: Text.ElideRight
+              text: tile.modelData.label + (tile.modelData.name === page.mainName ? " · main" : "")
+              color: page.cc.fg
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+            Text {
+              width: parent.width
+              horizontalAlignment: Text.AlignHCenter
+              elide: Text.ElideRight
+              visible: tile.height > Style.space(70)
+              text: tile.modelData.w + " × " + tile.modelData.h
+              color: Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.6)
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: page.placed.length > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (page.placed.length > 1) page.selected = tile.isSel ? "" : tile.modelData.name
+          }
+        }
+      }
+    }
+    CcRow {
+      visible: page.placed.length > 1 && !page.selectedPlaced
+      title: "Click a display above to move it"
+      subtitle: "Numbers match what Identify shows on each screen"
+    }
+    CcChoiceRow {
+      visible: !!page.selectedPlaced && page.placed.length > 2
+      title: "Place display " + (page.selectedPlaced ? page.selectedPlaced.num : "") + " next to"
+      options: page.placed.filter(function(p) { return p.name !== page.selected }).map(function(p) { return { value: p.name, label: p.num + " · " + p.label } })
+      value: page.anchorEff
+      onPicked: function(v) { page.anchorName = v }
+    }
+    CcRow {
+      visible: !!page.selectedPlaced
+      title: "Move display " + (page.selectedPlaced ? page.selectedPlaced.num : "")
+      subtitle: "Relative to display " + ((page.placedBy(page.anchorEff) || {}).num || "")
+      CcButton { text: "←  Left"; onClicked: page.place("left") }
+      CcButton { text: "↑  Above"; onClicked: page.place("above") }
+      CcButton { text: "↓  Below"; onClicked: page.place("below") }
+      CcButton { text: "→  Right"; onClicked: page.place("right") }
+    }
+    CcChoiceRow {
+      visible: !!page.selectedPlaced
+      title: "Line up edges"
+      subtitle: "Where it sits along the other display's edge"
+      options: [{ value: "start", label: "Top / Left" }, { value: "center", label: "Center" }, { value: "end", label: "Bottom / Right" }]
+      value: page.align
+      onPicked: function(v) { page.align = v; if (page.selectedPlaced) page.reapplyAlign() }
+    }
+  }
 
   // ------------------------------------------------------------ monitors
   Repeater {
@@ -151,6 +364,24 @@ CcPage {
           page.brightness = v
           page.cc.runner.run(["omarchy-brightness-display", "--no-osd", "--monitor", mon.modelData.name, Math.round(v * 100) + "%"], null)
         }
+      }
+      CcSwitchRow {
+        visible: !mon.internal
+        title: "Use this display"
+        subtitle: mon.modelData.disabled ? "Off: connected but not showing anything" : "On"
+        checked: !mon.modelData.disabled
+        onToggled: page.setEnabled(mon.modelData, !!mon.modelData.disabled)
+      }
+      CcChoiceRow {
+        visible: !mon.internal && !mon.modelData.disabled && page.monitors.length > 1
+        title: "Show"
+        useDropdown: true
+        dropdownWidth: Style.space(250)
+        options: [{ value: "", label: "Its own desktop (extend)" }].concat(page.monitors.filter(function(o) {
+          return o.name !== mon.modelData.name && !o.disabled && !page.mirrored(o)
+        }).map(function(o) { return { value: o.name, label: "Same as " + (o.name === page.laptop ? "built-in display" : (String(o.model || "") || o.name)) } }))
+        value: page.mirrored(mon.modelData) ? String(mon.modelData.mirrorOf) : ""
+        onPicked: function(v) { if (v !== (page.mirrored(mon.modelData) ? String(mon.modelData.mirrorOf) : "")) page.setMirror(mon.modelData, v) }
       }
       CcSwitchRow {
         visible: mon.internal && page.monitors.length > 1

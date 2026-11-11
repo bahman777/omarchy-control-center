@@ -130,7 +130,7 @@ CcPage {
       subtitle: page.details.ip ? page.details.ip + "/" + (page.details.prefix || "") : "—"
       clickable: !!page.details.ip
       onClicked: page.cc.copy(page.details.ip)
-      CcText { text: "Copy"; color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62); font.pixelSize: Style.font.caption; visible: !!page.details.ip }
+      CcText { text: "Copy"; color: Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.62); font.pixelSize: Style.font.caption; visible: !!page.details.ip }
     }
     CcRow { title: "Gateway"; subtitle: page.details.gateway || "—" }
     CcRow { title: "Interface"; subtitle: page.details.iface || (page.wifiDevice ? page.wifiDevice.name : "—") }
@@ -172,7 +172,7 @@ CcPage {
           CcText {
             visible: page.needsPassword(netItem.modelData)
             text: Icons.lock
-            color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62)
+            color: Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.62)
             font.family: Style.font.family
           }
           CcButton {
@@ -197,7 +197,7 @@ CcPage {
               width: Style.space(260)
               password: true
               placeholderText: "Password"
-              foreground: Color.menu.text
+              foreground: page.cc.fg
               onVisibleChanged: if (visible) forceActiveFocus()
               Keys.onReturnPressed: connectBtn.clicked()
             }

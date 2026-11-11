@@ -112,7 +112,7 @@ CcPage {
       subtitle: (page.self.HostName || "") + " · " + (page.self.TailscaleIPs || []).join(", ")
       clickable: true
       onClicked: page.cc.copy((page.self.TailscaleIPs || [""])[0])
-      CcText { text: "Copy IP"; color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.62); font.pixelSize: Style.font.caption }
+      CcText { text: "Copy IP"; color: Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.62); font.pixelSize: Style.font.caption }
     }
     CcRow {
       visible: page.running && !!page.self.DNSName
@@ -126,7 +126,7 @@ CcPage {
       delegate: CcRow {
         required property var modelData
         icon: Icons.info
-        iconColor: Color.urgent
+        iconColor: page.cc.urgent
         title: "Health warning"
         subtitle: String(modelData)
       }
@@ -200,7 +200,7 @@ CcPage {
       delegate: CcRow {
         required property var modelData
         icon: modelData.os === "iOS" || modelData.os === "android" ? Icons.phone : (modelData.os === "linux" && modelData.host.indexOf("server") >= 0 ? Icons.server : Icons.laptop)
-        iconColor: modelData.online ? Color.menu.text : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.4)
+        iconColor: modelData.online ? page.cc.fg : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.4)
         title: modelData.host + (modelData.exitActive ? "  · exit node" : "")
         subtitle: modelData.ip + " · " + modelData.os + (modelData.online ? (modelData.direct ? " · direct" : (modelData.relay ? " · relay " + modelData.relay : "")) : " · offline")
         dim: !modelData.online
@@ -209,7 +209,7 @@ CcPage {
         onRightClicked: page.cc.launch(["omarchy-tailscale-send", modelData.host])
         Rectangle {
           width: Style.space(8); height: width; radius: width / 2
-          color: modelData.online ? "#3fb950" : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.3)
+          color: modelData.online ? "#3fb950" : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.3)
         }
       }
     }

@@ -126,7 +126,7 @@ CcPage {
     title: "Battery"
     CcRow {
       icon: page.battery && page.battery.state === UPowerDeviceState.Charging ? Icons.batteryCharging : Icons.battery
-      iconColor: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery ? Color.urgent : Color.menu.text
+      iconColor: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery ? page.cc.urgent : page.cc.fg
       title: page.onBattery ? "On battery" : "Plugged in"
       subtitle: page.batteryText()
       CcLevelBar { level: page.hasBattery ? page.battery.percentage : 0; low: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery }
@@ -146,7 +146,7 @@ CcPage {
       delegate: CcRow {
         required property var modelData
         icon: modelData.kind === "mouse" ? Icons.mouse : modelData.kind === "keyboard" ? Icons.keyboard : Icons.bluetoothDevice(modelData.model.toLowerCase())
-        iconColor: modelData.percent <= 15 ? Color.urgent : Color.menu.text
+        iconColor: modelData.percent <= 15 ? page.cc.urgent : page.cc.fg
         title: modelData.model
         subtitle: modelData.percent + "%" + (modelData.status === "recharging" ? " · charging" : "") + " · " + modelData.source
           + (modelData.seen && Date.now() - modelData.seen > 600000 ? " · last seen " + Qt.formatTime(new Date(modelData.seen), "h:mm AP") : "")
@@ -232,7 +232,7 @@ CcPage {
     }
     CcRow {
       icon: Icons.power; title: page.confirming === "shutdown" ? "Click again to shut down" : "Shut down"; clickable: true
-      iconColor: Color.urgent
+      iconColor: page.cc.urgent
       onClicked: page.session("shutdown", ["omarchy-system", "shutdown"])
     }
   }

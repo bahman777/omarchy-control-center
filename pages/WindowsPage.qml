@@ -204,7 +204,7 @@ CcPage {
         required property var modelData
         readonly property bool active: String(modelData.id) === page.activeWs
         icon: Icons.windows
-        iconColor: active ? Color.accent : Color.menu.text
+        iconColor: active ? page.cc.accent : page.cc.fg
         title: "Workspace " + modelData.name + (active ? "  · current" : "")
         subtitle: modelData.windows + (modelData.windows === 1 ? " window" : " windows") + " · " + modelData.monitor + (modelData.title ? " · " + modelData.title : "")
         selected: active
@@ -239,7 +239,7 @@ CcPage {
     CcRow {
       visible: page.h.lastError !== ""
       icon: Icons.info
-      iconColor: Color.urgent
+      iconColor: page.cc.urgent
       title: "Hyprland rejected a change"
       subtitle: page.h.lastError
     }

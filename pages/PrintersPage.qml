@@ -224,7 +224,7 @@ CcPage {
       delegate: CcRow {
         required property var modelData
         icon: Icons.printer
-        iconColor: modelData.isDefault ? Color.accent : Color.menu.text
+        iconColor: modelData.isDefault ? page.cc.accent : page.cc.fg
         title: modelData.name.replace(/_/g, " ") + (modelData.isDefault ? "  · default" : "")
         subtitle: (modelData.state || "") + " · " + modelData.uri
         clickable: !modelData.isDefault
@@ -301,7 +301,7 @@ CcPage {
         id: addr
         width: Style.space(200)
         placeholderText: "e.g. 192.168.1.50"
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         property bool ccFocusable: visible
         property bool hasCursor: false
         function ccActivate() { forceActiveFocus() }
@@ -379,7 +379,7 @@ CcPage {
         id: scanName
         width: Style.space(110)
         placeholderText: "Name"
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         property bool ccFocusable: visible
         property bool hasCursor: false
         function ccActivate() { forceActiveFocus() }
@@ -388,7 +388,7 @@ CcPage {
         id: scanUrl
         width: Style.space(190)
         placeholderText: "http://…/eSCL"
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         property bool ccFocusable: visible
         property bool hasCursor: false
         function ccActivate() { forceActiveFocus() }

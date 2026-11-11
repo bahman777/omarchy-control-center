@@ -91,13 +91,13 @@ CcPage {
         required property var modelData
         readonly property bool isDefault: page.defaultSink && (page.defaultSink.id === modelData.id || page.volumeSinkName === modelData.name)
         icon: page.iconFor(modelData, false)
-        iconColor: isDefault ? Color.accent : Color.menu.text
+        iconColor: isDefault ? page.cc.accent : page.cc.fg
         title: page.label(modelData)
         subtitle: isDefault ? "Active" : "Click to use"
         selected: isDefault
         clickable: !isDefault
         onClicked: page.setOutput(modelData)
-        CcText { visible: parent && isDefault; text: Icons.check; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+        CcText { visible: parent && isDefault; text: Icons.check; color: page.cc.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
       }
     }
   }
@@ -128,7 +128,7 @@ CcPage {
         required property var modelData
         readonly property bool isDefault: page.defaultSource && page.defaultSource.id === modelData.id
         icon: page.iconFor(modelData, true)
-        iconColor: isDefault ? Color.accent : Color.menu.text
+        iconColor: isDefault ? page.cc.accent : page.cc.fg
         title: page.label(modelData)
         subtitle: isDefault ? "Active" : "Click to use"
         selected: isDefault

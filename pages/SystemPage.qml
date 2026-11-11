@@ -106,7 +106,7 @@ CcPage {
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         options: page.zones
         value: page.time.Timezone || ""
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         onChanged: function(v) {
           if (!v || v === page.time.Timezone || page.zones.indexOf(v) < 0) return
           // timedatectl asks polkit, which Omarchy's shell agent answers.
@@ -136,7 +136,7 @@ CcPage {
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         options: page.languages
         value: page.language
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         onChanged: function(v) {
           if (v && v !== page.language) page.cc.runner.run(["omarchy-language", v], function() { page.refresh() })
         }

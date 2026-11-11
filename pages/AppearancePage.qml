@@ -50,7 +50,7 @@ CcPage {
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         options: page.themes
         value: page.theme
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         onChanged: function(v) { page.setTheme(v) }
       }
     }
@@ -90,7 +90,7 @@ CcPage {
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         options: page.fonts
         value: page.font
-        foreground: Color.menu.text
+        foreground: page.cc.fg
         onChanged: function(v) {
           if (v && v !== page.font) page.cc.runner.run(["omarchy-font-set", v], function() { page.refresh() })
         }

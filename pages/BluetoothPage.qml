@@ -114,7 +114,7 @@ CcPage {
       delegate: CcRow {
         required property var modelData
         icon: Icons.bluetoothDevice(modelData.icon)
-        iconColor: modelData.connected ? Color.accent : Color.menu.text
+        iconColor: modelData.connected ? page.cc.accent : page.cc.fg
         title: modelData.name
         subtitle: page.subtitleFor(modelData)
         clickable: !page.pending[modelData.address]
