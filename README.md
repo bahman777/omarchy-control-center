@@ -36,6 +36,16 @@ Notifications → **Use Quick Settings for notifications** makes the plugin your
 
 Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
 
+## Battery alerts
+
+Always on, whichever program shows your notifications:
+
+- **Laptop** (while unplugged): 20% (normal), 10% and 5% (critical, with time remaining).
+- **Every other device**: Bluetooth headsets and mice, phones, and Logitech receiver devices (through Solaar): 15% and 5% (critical).
+- Each level alerts once and re-arms after charging. Critical alerts stay up for 20 seconds and remain in the notification list.
+- Omarchy's own single 10% warning is dropped while the notification center is on, so you don't get both.
+- Preview: `qs ipc --pid $(pgrep -n quickshell) call notifications batteryPreview`
+
 ## Settings pages
 
 | Page | What you can do |

@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Services.Notifications
+import Quickshell.Services.UPower
 import qs.Commons
 import "quick"
 
@@ -189,6 +190,76 @@ Scope {
     periphFile.setText(JSON.stringify(next) + "\n")
   }
 
+  // ------------------------------------------------------------ battery alerts
+  // Laptop, while unplugged: 20% (normal), 10% and 5% (critical).
+  // Every other device (Bluetooth, phone, Logitech): 15% and 5% (critical).
+  // Each level alerts once; charging, or gaining 10 points, re-arms it.
+  // Sent through notify-send so they reach whichever daemon owns notifications.
+  readonly property var laptopLevels: [20, 10, 5]
+  readonly property var deviceLevels: [15, 5]
+  property var alerted: ({})          // device key -> lowest level alerted
+  readonly property string alertsPath: stateDir + "/battery-alerts.json"
+  FileView {
+    id: alertsFile
+    path: svc.alertsPath
+    printErrors: false
+    atomicWrites: true
+    onLoaded: { try { var o = JSON.parse(text()); if (o && typeof o === "object" && !Array.isArray(o)) svc.alerted = o } catch (e) {} }
+  }
+  // Omarchy's own 10% warning; dropped while these alerts run (see receive()).
+  property string omarchyLowTitle: "Time to recharge!"
+  Process {
+    running: true
+    command: ["omarchy-i18n", "battery.lowTitle"]
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: { var t = String(text).trim(); if (t) svc.omarchyLowTitle = t } }
+  }
+  Timer { interval: 30000; running: true; repeat: true; triggeredOnStart: true; onTriggered: svc.checkBatteries() }
+  Connections { target: UPower; function onOnBatteryChanged() { svc.checkBatteries() } }
+
+  function checkBatteries() {
+    var d = UPower.displayDevice
+    if (d && d.isPresent && d.percentage > 0)
+      checkLevel("laptop", "Laptop", Math.round(d.percentage * 100), !UPower.onBattery, laptopLevels, true,
+                 d.timeToEmpty > 0 ? d.timeToEmpty : 0)
+    var devs = UPower.devices ? UPower.devices.values : []
+    for (var i = 0; i < devs.length; i++) {
+      var u = devs[i]
+      if (!u || u.isLaptopBattery || !u.isPresent || u.type === UPowerDeviceType.LinePower || !u.model || !(u.percentage > 0)) continue
+      checkLevel("upower:" + u.model, String(u.model), Math.round(u.percentage * 100),
+                 u.state === UPowerDeviceState.Charging || u.state === UPowerDeviceState.FullyCharged, deviceLevels, false, 0)
+    }
+    peripherals.forEach(function(p) {
+      checkLevel("solaar:" + p.model, p.model, p.percent, p.status === "recharging" || p.status === "full", svc.deviceLevels, false, 0)
+    })
+  }
+  function checkLevel(key, name, pct, charging, levels, isLaptop, secsLeft) {
+    var prev = alerted[key]
+    if (charging || (prev !== undefined && pct >= prev + 10)) {
+      if (prev !== undefined) { var r = Object.assign({}, alerted); delete r[key]; saveAlerts(r) }
+      return
+    }
+    var hit = -1
+    for (var i = 0; i < levels.length; i++) if (pct <= levels[i]) hit = levels[i]
+    if (hit < 0 || (prev !== undefined && prev <= hit)) return
+    var a = Object.assign({}, alerted); a[key] = hit; saveAlerts(a)
+    sendBatteryAlert(name, pct, hit, isLaptop, secsLeft)
+  }
+  function saveAlerts(a) { alerted = a; alertsFile.setText(JSON.stringify(a) + "\n") }
+  function sendBatteryAlert(name, pct, level, isLaptop, secsLeft) {
+    var left = secsLeft > 0 ? " · about " + (secsLeft >= 3600 ? Math.floor(secsLeft / 3600) + " h " : "") + Math.round((secsLeft % 3600) / 60) + " min left" : ""
+    var critical = !isLaptop || level <= 10
+    var title, body
+    if (isLaptop) {
+      title = level <= 5 ? "Plug in now: battery at " + pct + "%" : level <= 10 ? "Battery very low: " + pct + "%" : "Battery low: " + pct + "%"
+      body = (level <= 5 ? "Your laptop will shut down soon." : level <= 10 ? "Plug in soon." : "Time to find a charger.") + left
+    } else {
+      title = (level <= 5 ? "Almost empty: " : "Low battery: ") + name
+      body = pct + "% left · " + (level <= 5 ? "charge it now" : "charge it soon")
+    }
+    Quickshell.execDetached(["notify-send", "-a", "Battery", "-u", critical ? "critical" : "normal",
+      "-i", level <= 5 ? "battery-empty" : "battery-caution", "-t", critical ? "20000" : "10000", title, body])
+  }
+
   // ------------------------------------------------------------ server
   property var arrival: ({})        // id -> ms
   property var popupIds: []         // newest first
@@ -225,15 +296,17 @@ Scope {
   readonly property var tracked: server && server.trackedNotifications ? server.trackedNotifications.values : []
 
   function receive(n) {
+    // Our battery alerts cover Omarchy's single 10% warning; don't show both.
+    if (String(n.summary || "") === omarchyLowTitle) { n.dismiss(); return }
     n.tracked = true
     var a = {}; for (var k in arrival) a[k] = arrival[k]; a[n.id] = Date.now(); arrival = a
     if (dnd && n.urgency !== NotificationUrgency.Critical) return
     // Every pop-up times out (it stays in the panel's list until cleared).
     // Senders give milliseconds (notify-send -t 8000); a value that large is
-    // read as ms. "Never" or none → 6 s; capped at 10 s; urgent ones get 15 s.
+    // read as ms. "Never" or none → 6 s; capped at 10 s; urgent ones get 20 s.
     var t = Number(n.expireTimeout) || 0
     if (t > 300) t = t / 1000
-    var secs = n.urgency === NotificationUrgency.Critical ? 15 : t > 0 ? Math.min(10, Math.max(3, t)) : 6
+    var secs = n.urgency === NotificationUrgency.Critical ? 20 : t > 0 ? Math.min(10, Math.max(3, t)) : 6
     var u = {}; for (var j in popupUntil) u[j] = popupUntil[j]
     u[n.id] = Date.now() + secs * 1000
     popupUntil = u
@@ -347,6 +420,8 @@ Scope {
     function act(): string { if (!svc.popupIds.length) return "none"; svc.activate(svc.popupIds[0]); return "ok" }
     function dismissOne(): string { if (!svc.popupIds.length) return "none"; svc.dismiss(svc.popupIds[0]); return "ok" }
     function dismissAll(): string { svc.clearAll(); return "ok" }
+    // Preview the battery alerts without waiting for a battery to drain.
+    function batteryPreview(): string { svc.sendBatteryAlert("Laptop", 9, 10, true, 1500); svc.sendBatteryAlert("Mobi Fold for Business", 14, 15, false, 0); return "ok" }
     function invokeLast(): string { if (!svc.rows.length) return "none"; svc.activate(svc.rows[0].id); return "ok" }
     function invokeAction(n: int): string {
       if (!svc.popupIds.length) return "none"
