@@ -10,6 +10,8 @@ import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui
 import "../Icons.js" as Icons
+import "../Pages.js" as Pages
+import "../ui"
 
 // GNOME-style Quick Settings: header buttons, sliders, and a grid of pill
 // toggles whose menus open in place. Lives only while the panel is open, so
@@ -17,13 +19,128 @@ import "../Icons.js" as Icons
 Item {
   id: q
 
-  // The bar widget (BarWidget.qml): runner, close(), launch(), openSettings().
+  // The bar widget (BarWidget.qml): runner, hypr, close(), launch() and the
+  // `cc` API the settings pages use.
   required property var qc
 
-  implicitHeight: col.implicitHeight
-  property string expanded: qc.menu
-  Connections { target: q.qc; function onMenuChanged() { if (q.qc.menu) q.expanded = q.qc.menu } }
+  // The outer Flickable, so the keyboard cursor can scroll items into view.
+  property var flick: null
+
+  implicitHeight: page === "" ? col.implicitHeight : pageView.implicitHeight
+  property string expanded: ""
   function toggleMenu(id) { expanded = expanded === id ? "" : id }
+
+  // ------------------------------------------------------------ in-panel pages
+  // Settings open inside the panel as a page with a back button; nothing jumps
+  // out to another window.
+  property var pageStack: []
+  readonly property string page: pageStack.length ? pageStack[pageStack.length - 1] : ""
+  readonly property var pageInfo: page === "index" ? { title: "Settings", icon: Icons.cog } : (Pages.find(page) || { title: "", icon: "" })
+  function openPage(id) {
+    var target = id && (id === "index" || Pages.find(id)) ? id : "index"
+    pageStack = pageStack.concat([target])
+    expanded = ""
+    resetCursor()
+  }
+  function back() {
+    pageStack = pageStack.slice(0, -1)
+    resetCursor()
+  }
+  onPageChanged: { qc.pageMode = page !== ""; if (flick) flick.contentY = 0 }
+
+  // IPC / right-click requests: "wifi" expands a menu, "page:sound" opens a page.
+  function applyRequest(req) {
+    if (!req) return
+    if (req.indexOf("page:") === 0) { pageStack = []; openPage(req.slice(5)) }
+    else { pageStack = []; expanded = req }
+  }
+  Component.onCompleted: applyRequest(qc.menu)
+  Connections { target: q.qc; function onMenuChanged() { q.applyRequest(q.qc.menu) } }
+
+  // Esc: leave the page, then collapse the menu, then close the panel.
+  function stepBack() {
+    if (page !== "") back()
+    else if (expanded !== "") { expanded = ""; resetCursor() }
+    else qc.close()
+  }
+
+  // ------------------------------------------------------------ keyboard cursor
+  // Items opt in with `ccFocusable`, `hasCursor` and `ccActivate()`; sliders
+  // and choice rows add `ccAdjust(dir)` for Left/Right. Arrows move by
+  // geometry, Tab walks in order, so pages need no wiring of their own.
+  property Item cursor: null
+  property point lastCursorPos: Qt.point(0, 0)
+
+  function resetCursor() { setCursor(null) }
+  function setCursor(it) {
+    if (cursor && cursor !== it) cursor.hasCursor = false
+    cursor = it
+    if (it) {
+      it.hasCursor = true
+      lastCursorPos = centerOf(it)
+      ensureVisible(it)
+    }
+  }
+  function centerOf(it) { return it.mapToItem(q, it.width / 2, it.height / 2) }
+  function collect(item, out) {
+    if (!item || !item.visible || item.opacity === 0) return
+    if (item !== q && item.ccFocusable === true && typeof item.ccActivate === "function") out.push(item)
+    var ch = item.children
+    for (var i = 0; i < ch.length; i++) collect(ch[i], out)
+  }
+  function focusables() { var out = []; collect(q, out); return out }
+
+  function moveCursor(dx, dy) {
+    var items = focusables()
+    if (items.length === 0) return
+    if (!cursor || items.indexOf(cursor) < 0) {
+      // Dormant until the first key; resume near where it was.
+      var start = items[0], bestD = 1e9
+      if (cursor === null && lastCursorPos.y > 0) {
+        for (var k = 0; k < items.length; k++) {
+          var pk = centerOf(items[k]), d = Math.abs(pk.x - lastCursorPos.x) + Math.abs(pk.y - lastCursorPos.y)
+          if (d < bestD) { bestD = d; start = items[k] }
+        }
+      }
+      setCursor(start)
+      return
+    }
+    if (dx !== 0 && typeof cursor.ccAdjust === "function" && cursor.ccAdjust(dx)) return
+    var c = centerOf(cursor), best = null, bestScore = 1e9
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i]
+      if (it === cursor) continue
+      var p = centerOf(it), ddx = p.x - c.x, ddy = p.y - c.y, score
+      if (dy !== 0) {
+        if (ddy * dy <= 4) continue
+        score = Math.abs(ddy) + Math.abs(ddx) * 1.5
+      } else {
+        if (ddx * dx <= 4 || Math.abs(ddy) > Math.max(cursor.height, it.height) / 2) continue
+        score = Math.abs(ddx)
+      }
+      if (score < bestScore) { bestScore = score; best = it }
+    }
+    if (best) setCursor(best)
+  }
+  function stepCursor(dir) {
+    var items = focusables()
+    if (items.length === 0) return
+    var idx = cursor ? items.indexOf(cursor) : -1
+    idx = idx < 0 ? (dir > 0 ? 0 : items.length - 1) : (idx + dir + items.length) % items.length
+    setCursor(items[idx])
+  }
+  function activateCursor() {
+    if (!cursor) { moveCursor(0, 1); return }
+    var it = cursor
+    it.ccActivate()
+  }
+  function ensureVisible(it) {
+    if (!flick) return
+    var top = it.mapToItem(q, 0, 0).y, m = Style.space(12)
+    if (top - m < flick.contentY) flick.contentY = Math.max(0, top - m)
+    else if (top + it.height + m > flick.contentY + flick.height)
+      flick.contentY = Math.min(Math.max(0, flick.contentHeight - flick.height), top + it.height + m - flick.height)
+  }
 
   readonly property color fg: Color.menu.text
   function dimText(a) { return Qt.rgba(fg.r, fg.g, fg.b, a) }
@@ -285,6 +402,24 @@ Item {
   }
   readonly property bool airplane: !Networking.wifiEnabled && !btOn
 
+  function pillTip(p) {
+    if (!p || !p.id) return ""
+    switch (p.id) {
+    case "power": return "Switch between Balanced and Power Saver"
+    case "layout": return "Cycle this workspace: dwindle → scrolling → floating"
+    case "printers": return "Printers and print jobs"
+    case "scanners": return "Find scanners and scan a document"
+    case "awake": return p.active ? "Allow the screen to lock and sleep again" : "Keep the screen on: no dimming, lock or screensaver"
+    case "airplane": return p.active ? "Turn Wi-Fi and Bluetooth back on" : "Turn off Wi-Fi and Bluetooth"
+    case "dnd": return p.active ? "Show notification pop-ups again" : "Silence notification pop-ups"
+    default: return (p.active ? "Turn off " : "Turn on ") + p.title
+    }
+  }
+  function menuTipFor(id) {
+    return ({ wifi: "Networks", bluetooth: "Devices", tailscale: "Exit node", vpn: "VPN connections",
+              power: "Power modes", layout: "Window layout options" })[id] || ""
+  }
+
   readonly property var pillRows: {
     var rows = []
     for (var i = 0; i < pills.length; i += 2) rows.push(pills.slice(i, i + 2))
@@ -332,6 +467,7 @@ Item {
     id: col
     width: parent.width
     spacing: Style.space(14)
+    visible: q.page === ""
 
     // ---------------------------------------------------- header
     Item {
@@ -361,17 +497,30 @@ Item {
             color: q.fg; font.family: Style.font.menuFamily; font.pixelSize: Style.font.body
           }
         }
-        MouseArea { id: batMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: q.qc.openSettings("power") }
+        id: batChip
+        property bool ccFocusable: visible
+        property bool hasCursor: false
+        function ccActivate() { q.openPage("power") }
+        border.width: hasCursor ? 2 : 0
+        border.color: Color.accent
+        MouseArea { id: batMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: q.openPage("power") }
+        PanelToolTip {
+          visible: batMouse.containsMouse || batChip.hasCursor
+          text: q.hasBattery ? (UPower.onBattery ? "On battery" : "Plugged in")
+            + (q.battery.timeToEmpty > 0 && UPower.onBattery ? " · " + Math.round(q.battery.timeToEmpty / 60) + " min left" : "")
+            + (q.battery.timeToFull > 0 && !UPower.onBattery ? " · full in " + Math.round(q.battery.timeToFull / 60) + " min" : "")
+            + " — battery & power settings" : ""
+        }
       }
 
       Row {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(8)
-        QsRoundButton { icon: String.fromCodePoint(0xF0100); onClicked: q.qc.launch(["omarchy-capture-screenshot"], 350) }
-        QsRoundButton { icon: Icons.cog; onClicked: q.qc.openSettings("") }
-        QsRoundButton { icon: Icons.lock; onClicked: q.qc.launch(["omarchy-system-lock"], 150) }
-        QsRoundButton { icon: Icons.power; active: q.expanded === "session"; onClicked: q.toggleMenu("session") }
+        QsRoundButton { icon: String.fromCodePoint(0xF0100); tip: "Take a screenshot"; onClicked: q.qc.launch(["omarchy-capture-screenshot"], 350) }
+        QsRoundButton { icon: Icons.cog; tip: "All settings"; onClicked: q.openPage("index") }
+        QsRoundButton { icon: Icons.lock; tip: "Lock screen"; onClicked: q.qc.launch(["omarchy-system-lock"], 150) }
+        QsRoundButton { icon: Icons.power; tip: "Suspend, restart, power off or log out"; active: q.expanded === "session"; onClicked: q.toggleMenu("session") }
       }
     }
 
@@ -397,6 +546,9 @@ Item {
         muted: q.volumeMuted
         hasMenu: q.sinks.length > 0
         expanded: q.expanded === "outputs"
+        iconTip: q.volumeMuted ? "Unmute" : "Mute"
+        menuTip: "Choose output device"
+        valueTip: "Volume " + Math.round(q.volume * 100) + "% · " + q.nodeLabel(q.defaultSink)
         onIconClicked: if (q.volumeSink && q.volumeSink.audio) q.volumeSink.audio.muted = !q.volumeSink.audio.muted
         onMoved: function(v) { if (q.volumeSink && q.volumeSink.audio) { q.volumeSink.audio.volume = v; if (v > 0) q.volumeSink.audio.muted = false } }
         onCommitted: function(v) { if (q.volumeSink && q.volumeSink.audio) q.volumeSink.audio.volume = v }
@@ -416,7 +568,7 @@ Item {
             onClicked: q.qc.runner.run(["omarchy-audio-output-set-default", String(modelData.id), modelData.name], null)
           }
         }
-        QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.qc.openSettings("sound") }
+        QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
       }
 
       QsSlider {
@@ -426,6 +578,9 @@ Item {
         muted: !!(q.defaultSource && q.defaultSource.audio && q.defaultSource.audio.muted)
         hasMenu: q.sources.length > 0
         expanded: q.expanded === "inputs"
+        iconTip: muted ? "Unmute microphone" : "Mute microphone"
+        menuTip: "Choose input device"
+        valueTip: "Microphone " + Math.round(value * 100) + "% · " + q.nodeLabel(q.defaultSource)
         onIconClicked: q.qc.runner.run(["omarchy-audio-input-mute"], null)
         onMoved: function(v) { if (q.defaultSource && q.defaultSource.audio) q.defaultSource.audio.volume = v }
         onCommitted: function(v) { if (q.defaultSource && q.defaultSource.audio) q.defaultSource.audio.volume = v }
@@ -451,6 +606,9 @@ Item {
         visible: q.brightness >= 0
         icon: Icons.brightness
         value: q.brightness
+        ccFocusable: visible
+        valueTip: "Brightness " + Math.round(q.brightness * 100) + "%"
+        function ccActivate() {}
         onMoved: function(v) { q.pendingBrightness = v; brightnessApply.restart() }
         onCommitted: function(v) { q.brightness = v; q.pendingBrightness = v; brightnessApply.restart() }
       }
@@ -462,10 +620,13 @@ Item {
       spacing: Style.space(10)
 
       Repeater {
-        model: q.pillRows
+        // A count, not the rows themselves: pill state changes every few
+        // seconds and must not rebuild the delegates (and lose the cursor).
+        model: q.pillRows.length
         delegate: Column {
           id: pairRow
-          required property var modelData
+          required property int index
+          readonly property var modelData: q.pillRows[index] || []
           width: parent.width
           spacing: Style.space(10)
           readonly property var ids: modelData.map(function(p) { return p.id })
@@ -474,10 +635,13 @@ Item {
             width: parent.width
             spacing: Style.space(10)
             Repeater {
-              model: pairRow.modelData
+              model: pairRow.modelData.length
               delegate: QsPill {
-                required property var modelData
+                required property int index
+                readonly property var modelData: pairRow.modelData[index] || ({})
                 width: (pairRow.width - Style.space(10)) / 2
+                tip: q.pillTip(modelData)
+                menuTip: q.menuTipFor(modelData.id)
                 icon: modelData.icon
                 title: modelData.title
                 subtitle: modelData.subtitle
@@ -509,6 +673,114 @@ Item {
       }
     }
   }
+
+  // ================================================================ page view
+  Column {
+    id: pageView
+    width: parent.width
+    visible: q.page !== ""
+    spacing: Style.space(8)
+
+    Item {
+      width: parent.width
+      height: Style.space(38)
+      QsRoundButton {
+        id: backBtn
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        icon: "\uf053"
+        tip: "Back (Esc)"
+        onClicked: q.back()
+      }
+      Row {
+        anchors.centerIn: parent
+        spacing: Style.space(8)
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: q.pageInfo.icon || ""
+          color: Color.accent
+          font.family: Style.font.family
+          font.pixelSize: Style.font.icon
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: q.pageInfo.title || ""
+          color: q.fg
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.subtitle
+          font.weight: Font.DemiBold
+        }
+      }
+      QsRoundButton {
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        visible: q.page !== "index"
+        icon: Icons.cog
+        tip: "All settings"
+        onClicked: q.openPage("index")
+      }
+    }
+
+    Loader {
+      width: parent.width
+      active: q.page === "index"
+      visible: active
+      height: item ? item.implicitHeight : 0
+      sourceComponent: indexPage
+    }
+    Loader {
+      id: pageLoader
+      width: parent.width
+      visible: q.page !== "" && q.page !== "index"
+      height: item && visible ? item.implicitHeight : 0
+      Component.onCompleted: load()
+      function load() {
+        if (q.page === "" || q.page === "index") { if (q.page === "") setSource(""); return }
+        var info = Pages.find(q.page)
+        if (info) setSource(Qt.resolvedUrl("../pages/" + info.file) + "?v=" + q.qc.buildStamp, { cc: q.qc })
+      }
+      Connections { target: q; function onPageChanged() { pageLoader.load() } }
+    }
+  }
+
+  Component {
+    id: indexPage
+    Column {
+      width: parent ? parent.width : 0
+      spacing: Style.space(10)
+      TextField {
+        id: search
+        width: parent.width
+        placeholderText: "Search settings"
+        foreground: Color.menu.text
+        property bool ccFocusable: visible
+        property bool hasCursor: false
+        function ccActivate() { forceActiveFocus() }
+        Component.onCompleted: q.searchField = search
+        Keys.onReturnPressed: {
+          var hits = Pages.filter(text)
+          if (hits.length) q.openPage(hits[0].id)
+        }
+        Keys.onDownPressed: function(e) { q.qc.focusKeys(); q.moveCursor(0, 1); e.accepted = true }
+      }
+      QsMenu {
+        Repeater {
+          model: Pages.filter(search.text)
+          delegate: QsMenuItem {
+            required property var modelData
+            icon: modelData.icon
+            text: modelData.title
+            trailing: "\uf054"
+            onClicked: q.openPage(modelData.id)
+          }
+        }
+        QsMenuItem { visible: Pages.filter(search.text).length === 0; text: "No matching settings"; clickable: false; dim: true }
+      }
+    }
+  }
+  property var searchField: null
 
   // ================================================================ menus
   Component {
@@ -567,7 +839,7 @@ Item {
           }
         }
       }
-      QsMenuItem { text: "All Networks"; separatorAbove: true; onClicked: q.qc.openSettings("wifi") }
+      QsMenuItem { text: "All Networks"; separatorAbove: true; onClicked: q.openPage("wifi") }
     }
   }
 
@@ -592,7 +864,7 @@ Item {
           onClicked: q.btAct(modelData, modelData.connected ? "disconnect" : "connect")
         }
       }
-      QsMenuItem { text: "Bluetooth Settings"; separatorAbove: true; onClicked: q.qc.openSettings("bluetooth") }
+      QsMenuItem { text: "Bluetooth Settings"; separatorAbove: true; onClicked: q.openPage("bluetooth") }
     }
   }
 
@@ -625,7 +897,7 @@ Item {
           })
         }
       }
-      QsMenuItem { text: "Tailscale Settings"; separatorAbove: true; onClicked: q.qc.openSettings("tailscale") }
+      QsMenuItem { text: "Tailscale Settings"; separatorAbove: true; onClicked: q.openPage("tailscale") }
     }
   }
 
@@ -643,7 +915,7 @@ Item {
           onClicked: q.qc.runner.run(["nmcli", "connection", modelData.active ? "down" : "up", "id", modelData.name], function() { q.refreshSlow() })
         }
       }
-      QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.qc.openSettings("network") }
+      QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.openPage("network") }
     }
   }
 
@@ -662,7 +934,7 @@ Item {
           onClicked: q.setProfile(modelData)
         }
       }
-      QsMenuItem { text: "Power Settings"; separatorAbove: true; onClicked: q.qc.openSettings("power") }
+      QsMenuItem { text: "Power Settings"; separatorAbove: true; onClicked: q.openPage("power") }
     }
   }
 
@@ -686,7 +958,7 @@ Item {
       }
       QsMenuItem { icon: Icons.refresh; text: "Cycle This Workspace"; separatorAbove: true; onClicked: q.pillToggle("layout") }
       QsMenuItem { text: "Toggle Window Gaps"; onClicked: q.qc.runner.run(["omarchy-hyprland-window-gaps-toggle"], null) }
-      QsMenuItem { text: "Windows & Layout Settings"; separatorAbove: true; onClicked: q.qc.openSettings("windows") }
+      QsMenuItem { text: "Windows & Layout Settings"; separatorAbove: true; onClicked: q.openPage("windows") }
     }
   }
 

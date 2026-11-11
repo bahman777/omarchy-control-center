@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Ui
 
 // GNOME-style quick toggle pill: icon, title, subtitle; the body toggles,
 // the chevron (when there is a menu) opens it in place below the row.
@@ -13,8 +14,15 @@ Rectangle {
   property bool menuOnly: false
   property bool expanded: false
   property bool busy: false
+  property string tip: ""        // tooltip for the body
+  property string menuTip: ""    // tooltip for the chevron
   signal toggled()
   signal menuRequested()
+
+  // Keyboard cursor: the body and the chevron are separate stops.
+  property bool ccFocusable: visible
+  property bool hasCursor: false
+  function ccActivate() { menuOnly ? menuRequested() : toggled() }
 
   readonly property color fg: Color.menu.text
   readonly property color ink: active ? Qt.rgba(Color.menu.background.r, Color.menu.background.g, Color.menu.background.b, 1) : fg
@@ -24,6 +32,8 @@ Rectangle {
   color: active ? Color.accent
     : Qt.rgba(fg.r, fg.g, fg.b, bodyMouse.containsMouse || chevMouse.containsMouse ? 0.14 : 0.08)
   opacity: busy ? 0.7 : 1
+  border.width: hasCursor ? 2 : 0
+  border.color: active ? Color.menu.text : Color.accent
   Behavior on color { ColorAnimation { duration: Style.duration(120) } }
 
   readonly property bool splitMenu: hasMenu && !menuOnly
@@ -82,12 +92,25 @@ Rectangle {
       enabled: !pill.busy
       onClicked: pill.menuOnly ? pill.menuRequested() : pill.toggled()
     }
+    PanelToolTip { visible: pill.tip !== "" && (bodyMouse.containsMouse || pill.hasCursor); text: pill.tip }
   }
 
   Item {
+    id: chevItem
     visible: pill.splitMenu
     anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
     width: pill.chevWidth
+    property bool ccFocusable: visible
+    property bool hasCursor: false
+    function ccActivate() { pill.menuRequested() }
+    Rectangle {
+      anchors.fill: parent
+      anchors.margins: Style.space(4)
+      radius: pill.radius
+      color: "transparent"
+      border.width: chevItem.hasCursor ? 2 : 0
+      border.color: pill.active ? Color.menu.text : Color.accent
+    }
     Rectangle {
       anchors.left: parent.left
       anchors.verticalCenter: parent.verticalCenter
@@ -111,5 +134,6 @@ Rectangle {
       cursorShape: Qt.PointingHandCursor
       onClicked: pill.menuRequested()
     }
+    PanelToolTip { visible: pill.menuTip !== "" && (chevMouse.containsMouse || chevItem.hasCursor); text: pill.menuTip }
   }
 }

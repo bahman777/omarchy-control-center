@@ -13,8 +13,8 @@ import "Icons.js" as Icons
 
 // GNOME-style status cluster in the bar (network · Bluetooth · volume ·
 // battery). Clicking it drops the Quick Settings panel from the bar, like the
-// top-right menu in Ubuntu. The full Control Center window opens from its
-// gear button or with `omarchy-shell control-center settings [page]`.
+// top-right menu in Ubuntu. Every setting lives in that panel: deeper
+// settings open as pages inside it, with a back button.
 Panel {
   id: root
   moduleName: "io.github.bahman777.control-center"
@@ -68,9 +68,11 @@ Panel {
     .filter(function(g) { return g !== "" }).join("  ")
 
   // ------------------------------------------------------------ helpers for QuickContent
-  // Menu to expand when the panel next opens (IPC `menu`).
+  // Request applied when the panel opens: a menu id ("wifi") or "page:<id>".
   property string menu: ""
-  onOpenedChanged: if (!opened) menu = ""
+  onOpenedChanged: if (!opened) { menu = ""; pageMode = false }
+  property bool pageMode: false
+  readonly property string buildStamp: String(Date.now())
   readonly property alias runner: runner
   readonly property alias hypr: hypr
   Runner { id: runner }
@@ -91,9 +93,26 @@ Panel {
   }
   Timer { id: launchTimer; property var argv: []; onTriggered: runner.detach(argv) }
   function openSettings(page) {
-    root.close()
-    summonPlugin(root.pluginId, page ? JSON.stringify({ page: page }) : "{}")
+    root.menu = ""
+    root.menu = "page:" + (page || "index")
+    if (!root.opened) root.open()
   }
+
+  // ---- the `cc` API the settings pages (pages/*.qml) are written against
+  readonly property var shell: shellApi
+  function summon(id, payload) { root.close(); summonPlugin(id, payload) }
+  function dismiss() { root.close() }
+  function launchTerminal(cmd) { launch(["omarchy-launch-floating-terminal-with-presentation", cmd], 0) }
+  property string toastText: ""
+  function toast(text) { toastText = String(text); toastTimer.restart() }
+  Timer { id: toastTimer; interval: 2200 }
+  readonly property bool toastVisible: toastTimer.running
+  function copy(text) {
+    runner.run(["wl-copy", "--", String(text)], null)
+    toast("Copied " + text)
+  }
+  property var keyRoot: null
+  function focusKeys() { if (keyRoot) keyRoot.forceActiveFocus() }
   function notify(title, body) {
     runner.run(["omarchy-notification-send", "-g", Icons.cog, String(title), String(body)], null)
   }
@@ -106,7 +125,7 @@ Panel {
     function settings(page: string): string { root.openSettings(page); return "ok" }
     // Open the panel with one menu expanded: wifi, bluetooth, tailscale, vpn,
     // power, layout, printers, scanners, outputs, inputs, session.
-    function menu(id: string): string { root.menu = id; root.open(); return "open" }
+    function menu(id: string): string { root.menu = ""; root.menu = id; if (!root.opened) root.open(); return "open" }
   }
 
   WidgetButton {
@@ -119,7 +138,7 @@ Panel {
     useActiveColor: false
     tooltipText: root.opened ? "" : "Quick Settings"
     onPressed: function(b) {
-      if (b === Qt.RightButton) root.openSettings("")
+      if (b === Qt.RightButton) root.openSettings("index")
       else root.toggle()
     }
   }
@@ -131,15 +150,45 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: panel.loadedContent
-    contentWidth: panel.fittedContentWidth(Style.space(470))
+    contentWidth: panel.fittedContentWidth(Style.space(root.pageMode ? 540 : 470))
     contentHeight: panel.fittedContentHeight(panel.loadedContentHeight)
 
-    content: PanelKeyCatcher {
+    // Keys come here first. Arrows/hjkl move the cursor, Tab walks in
+    // order, Enter/Space activate, Left/Right adjust sliders, Esc steps back
+    // (page → menu → close). A text field or open dropdown keeps the keys
+    // until Esc hands them back.
+    content: Item {
+      id: keyRoot
       anchors.fill: parent
       implicitHeight: quick.implicitHeight
-      onCloseRequested: root.close()
+      focus: true
+      Component.onCompleted: root.keyRoot = keyRoot
+      Keys.priority: Keys.BeforeItem
+      Keys.onPressed: function(event) {
+        var fi = keyRoot.Window.activeFocusItem
+        if (fi && fi !== keyRoot) {
+          if (event.key === Qt.Key_Escape && fi.popupOpen !== true) { keyRoot.forceActiveFocus(); event.accepted = true }
+          return
+        }
+        var k = event.key, t = event.text
+        if (k === Qt.Key_Escape) quick.stepBack()
+        else if (k === Qt.Key_Down || t === "j") quick.moveCursor(0, 1)
+        else if (k === Qt.Key_Up || t === "k") quick.moveCursor(0, -1)
+        else if (k === Qt.Key_Right || t === "l") quick.moveCursor(LayoutMirroring.enabled ? -1 : 1, 0)
+        else if (k === Qt.Key_Left || t === "h") quick.moveCursor(LayoutMirroring.enabled ? 1 : -1, 0)
+        else if (k === Qt.Key_Tab) quick.stepCursor(1)
+        else if (k === Qt.Key_Backtab) quick.stepCursor(-1)
+        else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) quick.activateCursor()
+        else if (k === Qt.Key_Backspace && quick.page !== "") quick.back()
+        else if (quick.page === "index" && quick.searchField && t && t.length === 1 && t > " ") {
+          quick.searchField.forceActiveFocus()
+          quick.searchField.text += t
+        } else return
+        event.accepted = true
+      }
 
       Flickable {
+        id: flick
         anchors.fill: parent
         contentWidth: width
         contentHeight: quick.implicitHeight
@@ -152,6 +201,28 @@ Panel {
           id: quick
           width: parent.width
           qc: root
+          flick: flick
+        }
+      }
+
+      Rectangle {
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.toastVisible
+        width: toastLabel.implicitWidth + Style.space(28)
+        height: toastLabel.implicitHeight + Style.space(14)
+        radius: height / 2
+        color: Color.tooltip.background
+        border.width: 1
+        border.color: Color.tooltip.border
+        Text {
+          id: toastLabel
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: root.toastText
+          color: Color.tooltip.text
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.bodySmall
         }
       }
     }

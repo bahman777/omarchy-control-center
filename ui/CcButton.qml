@@ -8,4 +8,6 @@ Button {
   foreground: Color.menu.text
   fontFamily: Style.font.menuFamily
   fontSize: Style.font.bodySmall
+  property bool ccFocusable: visible
+  function ccActivate() { clicked() }
 }

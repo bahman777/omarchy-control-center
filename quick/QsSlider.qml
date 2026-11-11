@@ -11,6 +11,18 @@ Item {
   property bool muted: false
   property bool hasMenu: false
   property bool expanded: false
+  property string iconTip: ""
+  property string menuTip: ""
+  property string valueTip: ""
+  // Keyboard: the slider is one stop; Left/Right adjust it.
+  property bool ccFocusable: visible
+  property bool hasCursor: false
+  function ccActivate() { iconClicked() }
+  function ccAdjust(dir) {
+    var v = Math.max(0, Math.min(row.to, row.value + dir * 0.05))
+    row.moved(v); row.committed(v)
+    return true
+  }
   signal iconClicked()
   signal moved(real value)
   signal committed(real value)
@@ -24,9 +36,13 @@ Item {
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     icon: row.icon
+    tip: row.iconTip
+    hasCursor: row.hasCursor
+    ccFocusable: false
     onClicked: row.iconClicked()
   }
   PanelSlider {
+    id: slider
     anchors.left: btn.right
     anchors.leftMargin: Style.space(10)
     anchors.right: chev.visible ? chev.left : parent.right
@@ -42,6 +58,16 @@ Item {
     onMoved: function(v) { row.moved(v) }
     onReleased: function(v) { row.committed(v) }
   }
+  MouseArea {
+    id: sliderHover
+    anchors.fill: slider
+    hoverEnabled: true
+    acceptedButtons: Qt.NoButton
+  }
+  PanelToolTip {
+    visible: row.valueTip !== "" && (sliderHover.containsMouse || slider.dragging || row.hasCursor)
+    text: row.valueTip
+  }
   QsRoundButton {
     id: chev
     visible: row.hasMenu
@@ -52,6 +78,7 @@ Item {
     active: row.expanded
     rotation: row.expanded ? 90 : 0
     color: row.expanded ? Color.accent : "transparent"
+    tip: row.menuTip
     onClicked: row.menuRequested()
   }
 }

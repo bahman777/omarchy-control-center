@@ -1,13 +1,22 @@
 import QtQuick
 import qs.Commons
+import qs.Ui
 
 Rectangle {
   id: b
   property string icon: ""
+  property string tip: ""
   property bool active: false
+  // Keyboard cursor contract (see QuickContent.moveCursor).
+  property bool ccFocusable: visible
+  property bool hasCursor: false
+  function ccActivate() { clicked() }
   signal clicked()
+
   width: Style.space(38); height: width; radius: Style.cornerRadius > 0 ? width / 2 : 0
-  color: active ? Color.accent : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, mouse.containsMouse ? 0.16 : 0.08)
+  color: active ? Color.accent : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, mouse.containsMouse || hasCursor ? 0.16 : 0.08)
+  border.width: hasCursor ? 2 : 0
+  border.color: Color.accent
   Text {
     anchors.centerIn: parent
     textFormat: Text.PlainText
@@ -17,4 +26,5 @@ Rectangle {
     font.pixelSize: Style.font.icon
   }
   MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: b.clicked() }
+  PanelToolTip { visible: b.tip !== "" && (mouse.containsMouse || b.hasCursor); text: b.tip }
 }

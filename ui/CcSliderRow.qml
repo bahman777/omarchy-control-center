@@ -12,7 +12,19 @@ CcRow {
   property real stepSize: 0.05
   property bool integer: false
   property string valueText: ""
-  property int sliderWidth: Style.space(240)
+  forceStack: width < Style.space(560)
+  autoStack: false
+  property int sliderWidth: stacked ? Math.max(Style.space(120), width - (icon !== "" ? Style.space(48) : 0) - Style.spacing.rowPaddingX * 2 - Style.space(46) - Style.spacing.lg) : Style.space(240)
+  ccFocusable: visible
+  function ccActivate() {}
+  function ccAdjust(dir) {
+    var span = to - from
+    var step = Math.max(stepSize, span / 20)
+    var v = Math.max(from, Math.min(to, value + dir * step))
+    if (integer) v = Math.round(v)
+    moved(v); committed(v)
+    return true
+  }
   // Follows the knob while dragging, for live value readouts.
   readonly property real current: slider.liveValue
   signal moved(real value)

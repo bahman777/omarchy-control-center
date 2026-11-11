@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Ui
 
 Rectangle {
   id: item
@@ -11,7 +12,11 @@ Rectangle {
   property bool dim: false
   property bool separatorAbove: false
   property bool clickable: true
+  property string tip: ""
   signal clicked()
+  property bool ccFocusable: visible && clickable
+  property bool hasCursor: false
+  function ccActivate() { clicked() }
 
   width: parent ? parent.width : 280
   height: Style.space(detail !== "" ? 44 : 36) + (separatorAbove ? Style.space(9) : 0)
@@ -29,7 +34,9 @@ Rectangle {
     anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
     height: parent.height - (item.separatorAbove ? Style.space(9) : 0)
     radius: item.radius
-    color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, mouse.containsMouse && item.clickable ? 0.10 : 0)
+    color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, (mouse.containsMouse || item.hasCursor) && item.clickable ? 0.10 : 0)
+    border.width: item.hasCursor ? 2 : 0
+    border.color: Color.accent
 
     Text {
       id: ic
@@ -91,5 +98,6 @@ Rectangle {
       cursorShape: Qt.PointingHandCursor
       onClicked: item.clicked()
     }
+    PanelToolTip { visible: item.tip !== "" && (mouse.containsMouse || item.hasCursor); text: item.tip }
   }
 }

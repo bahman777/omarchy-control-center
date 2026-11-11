@@ -11,6 +11,21 @@ CcRow {
   property int dropdownWidth: Style.space(220)
   signal picked(string value)
 
+  ccFocusable: visible
+  function optValue(o) { return typeof o === "object" ? String(o.value) : String(o) }
+  function ccActivate() {
+    if (useDropdown) { dd.forceActiveFocus(); dd.open() }
+    else ccAdjust(1)
+  }
+  function ccAdjust(dir) {
+    if (useDropdown || options.length === 0) return false
+    var idx = 0
+    for (var i = 0; i < options.length; i++) if (optValue(options[i]) === value) idx = i
+    idx = Math.max(0, Math.min(options.length - 1, idx + dir))
+    if (optValue(options[idx]) !== value) picked(optValue(options[idx]))
+    return true
+  }
+
   ButtonGroup {
     visible: !root.useDropdown
     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
@@ -23,7 +38,9 @@ CcRow {
     onChanged: function(v) { root.picked(v) }
   }
   Dropdown {
+    id: dd
     visible: root.useDropdown
+    hasCursor: root.hasCursor
     width: root.dropdownWidth
     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
     showLabel: false

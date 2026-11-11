@@ -1,4 +1,4 @@
-# Control Center for Omarchy
+# Quick Settings for Omarchy
 
 A GNOME Settings–style control center for [Omarchy](https://omarchy.org) Quattro, built as an Omarchy shell (Quickshell) plugin. Every common system setting in one window, showing what's on, what's available, and what you can change, and updating live as things change.
 
@@ -12,18 +12,20 @@ Click the status icons in the bar (network · Bluetooth · volume · battery) an
 - **Sliders:** volume, microphone and brightness. The chevron next to a slider picks the output or input device, so a headset is one click away.
 - **Toggles:** Wi-Fi, Wired, Bluetooth, Tailscale, VPN, Power Mode, Night Light, Do Not Disturb, Stay Awake, Airplane Mode, Window Layout, Printers and Scanners. Click a pill to switch it on or off. Click its chevron to open its menu in place: networks with inline password entry, Bluetooth devices with battery levels, Tailscale exit nodes, power modes, the Hyprland layout, printers (set the default, cancel jobs) and scanners (scan with Document Scanner).
 
-Anything that opens a real window (settings, screenshot, printer setup, scanning) closes the panel first.
+**Every setting stays in the panel.** The ⚙ button, the battery chip and each menu's "… Settings" link open a settings page *inside* the panel, with a back button. Those pages are Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Power, Windows & Layout, Keyboard & Mouse, Appearance, Notifications and System, and a search box finds the right one. Only things that are real apps (screenshot, printer setup, the document scanner, nmtui) open a window, and the panel closes first so nothing is ever hidden behind it.
+
+**Keyboard:** the arrow keys (or `h j k l`) move the highlight, `Tab` steps through everything in order, `Enter`/`Space` activates, `←`/`→` adjust a highlighted slider or choice, and `Esc` goes back a page, then collapses an open menu, then closes the panel. On the settings index, just start typing to search. Hovering or highlighting a control shows a tooltip.
 
 ```bash
 omarchy-shell control-center toggle          # open/close Quick Settings
 omarchy-shell control-center menu wifi       # open with a menu expanded (wifi, bluetooth, tailscale, vpn,
                                              # power, layout, printers, scanners, outputs, inputs, session)
-omarchy-shell control-center settings sound  # open the full settings window on a page
+omarchy-shell control-center settings sound  # open the panel on a settings page (or 'index')
 ```
 
-Right-clicking the bar icons opens the full settings window. You may want to remove Omarchy's separate network, Bluetooth and audio icons from the bar (`omarchy bar` or Omarchy's bar settings), since the cluster replaces them.
+Right-clicking the bar icons opens the settings index. You may want to remove Omarchy's separate network, Bluetooth and audio icons from the bar (`omarchy bar` or Omarchy's bar settings), since the cluster replaces them.
 
-## Settings window
+## Settings pages
 
 | Page | What you can do |
 |---|---|
@@ -101,7 +103,7 @@ The plugin lives in `~/.config/omarchy/plugins/io.github.bahman777.control-cente
 manifest.json      plugin manifest (bar-widget + overlay)
 BarWidget.qml      status icons in the bar + Quick Settings panel
 quick/             Quick Settings pills, menus, sliders
-Settings.qml       the window: sidebar, search, page host
+Pages.js           the settings pages shown in the panel
 Runner.qml         argv-only process runner (no shell strings built from data)
 HyprOptions.qml    live Hyprland options + persistence
 HyprSpec.js        option allowlist, validation, Lua serialization
