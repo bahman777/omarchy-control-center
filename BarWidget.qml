@@ -100,6 +100,15 @@ Panel {
     for (var i = 0; i < ps.length; i++) if (ps[i] && ps[i].isPlaying && String(ps[i].dbusName || "").indexOf("playerctld") < 0) return ps[i]
     return null
   }
+  // The Now Playing card stays for 30 s after the music pauses or stops, then
+  // goes away. Kept here because the panel's contents are rebuilt on open.
+  property bool musicLinger: false
+  onPlayingChanged: {
+    if (playing) { musicLinger = false; musicLingerTimer.stop() }
+    else { musicLinger = true; musicLingerTimer.restart() }
+  }
+  Timer { id: musicLingerTimer; interval: 30000; onTriggered: root.musicLinger = false }
+  readonly property bool showNowPlaying: !!playing || musicLinger
   readonly property string glyphs: [playing ? Icons.music : "", notifGlyph, netGlyph, tsUp ? Icons.vpn : "",
     btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
     .filter(function(g) { return g !== "" }).join("  ")

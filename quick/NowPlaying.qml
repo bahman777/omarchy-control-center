@@ -7,7 +7,8 @@ import qs.Ui
 
 // Now Playing card: album cover, title/artist, a progress bar you can click to
 // seek, previous / play-pause / next, and a switcher when several players
-// are around. Shown only while a player is playing or paused.
+// are around. Shown while a player is playing, and for 30 s after it pauses
+// or stops.
 Rectangle {
   id: np
 
@@ -24,7 +25,9 @@ Rectangle {
   readonly property bool hasTrack: !!player && String(player.trackTitle || "") !== ""
   readonly property color fg: Color.menu.text
 
-  visible: hasTrack
+  // Set by the panel: false once nothing has played for 30 s.
+  property bool show: true
+  visible: hasTrack && show
   width: parent ? parent.width : 0
   height: visible ? content.implicitHeight + Style.space(20) : 0
   radius: Math.max(10, Style.cornerRadius)

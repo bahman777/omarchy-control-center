@@ -700,7 +700,7 @@ Item {
     }
 
     // ---------------------------------------------------- now playing
-    NowPlaying { id: nowPlaying }
+    NowPlaying { id: nowPlaying; show: q.qc.showNowPlaying }
 
     // ---------------------------------------------------- sliders
     Column {
