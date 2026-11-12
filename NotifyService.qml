@@ -125,6 +125,26 @@ Scope {
     if (dnd) popupIds = popupIds.filter(function(id) { var n = byId(id); return n && n.urgency === NotificationUrgency.Critical })
   }
 
+  // Mirror Do Not Disturb into Omarchy's notification state file while we own
+  // notifications, so bar widgets that read it (and Omarchy, if it takes over
+  // again later) agree with us. Only the "dnd" key changes.
+  onDndChanged: mirrorDnd()
+  onActiveChanged: mirrorDnd()
+  function mirrorDnd() {
+    if (!active) return
+    Quickshell.execDetached(["python3", "-I", "-c",
+      "import json,os,sys,tempfile\n"
+      + "p=os.path.expanduser('~/.local/state/omarchy/notifications.json')\n"
+      + "try:\n d=json.load(open(p))\nexcept Exception:\n d={'version':3}\n"
+      + "if not isinstance(d,dict): d={'version':3}\n"
+      + "v=sys.argv[1]=='true'\n"
+      + "if d.get('dnd')!=v:\n"
+      + " d['dnd']=v; os.makedirs(os.path.dirname(p),exist_ok=True)\n"
+      + " fd,t=tempfile.mkstemp(dir=os.path.dirname(p))\n"
+      + " f=os.fdopen(fd,'w'); json.dump(d,f,indent=2); f.write('\\n'); f.close(); os.replace(t,p)\n",
+      dnd ? "true" : "false"])
+  }
+
   // ------------------------------------------------------------ peripherals
   // Logitech Unifying/Bolt devices aren't Bluetooth and Linux exposes no
   // battery for them; Solaar reads it over HID++ (~6 s). Polled here in the
