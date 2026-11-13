@@ -119,6 +119,23 @@ Panel {
   Timer { id: musicLingerTimer; interval: 30000; onTriggered: root.musicLinger = false }
   readonly property bool showNowPlaying: !!playing || musicLinger
 
+  // ------------------------------------------------------------ privacy
+  // Apps using the camera / microphone right now (tools/privacy.sh), shown as
+  // orange icons at the front of the cluster.
+  property string camApps: ""
+  property string micApps: ""
+  Timer {
+    interval: 3000; running: true; repeat: true; triggeredOnStart: true
+    onTriggered: root.runner.run(["bash", root.pluginDir + "/tools/privacy.sh"], function(code, out) {
+      var cam = "", mic = ""
+      String(out).split("\n").forEach(function(l) {
+        if (l.indexOf("cam:") === 0) cam = l.slice(4).trim()
+        else if (l.indexOf("mic:") === 0) mic = l.slice(4).trim()
+      })
+      root.camApps = cam; root.micApps = mic
+    })
+  }
+
   // ------------------------------------------------------------ status colours
   // Taken from the theme's colors.toml (red/orange/green/blue), so they
   // follow theme changes; fallbacks for themes that leave them out.
@@ -151,6 +168,8 @@ Panel {
   readonly property color battColor: plugged ? cGreen : battPct <= 0.10 ? cRed : battPct <= 0.20 ? cOrange : barFg
   readonly property string statusTip: {
     var l = []
+    if (camApps !== "") l.push("Camera in use: " + camApps.split(",").join(", "))
+    if (micApps !== "") l.push("Microphone in use: " + micApps.split(",").join(", "))
     if (playing) l.push("Playing: " + [playing.trackTitle, playing.trackArtist].filter(function(x) { return x }).join(" — "))
     if (notifActive) l.push("Notifications: " + (notifService.dnd ? "Do Not Disturb" : notifService.count > 0 ? notifService.count + " unread" : "none"))
     l.push(wiredUp ? "Ethernet: connected" : !Networking.wifiEnabled ? "Wi-Fi: off" : wifiNet ? "Wi-Fi: " + (wifiNet.name || "connected") : "Wi-Fi: not connected")
@@ -321,6 +340,8 @@ Panel {
       horizontalItemAlignment: Grid.AlignHCenter
       scale: button.pressScale
 
+      BarGlyph { glyph: root.camApps !== "" ? String.fromCodePoint(0xF0567) : ""; color: root.cOrange }
+      BarGlyph { glyph: root.micApps !== "" ? Icons.microphone : ""; color: root.cOrange }
       BarGlyph { glyph: root.playing ? Icons.music : ""; color: root.barFg }
       BarGlyph { glyph: root.notifGlyph; color: root.notifActive && !root.notifService.dnd && root.notifService.count > 0 ? root.accent : root.barFg }
       BarGlyph { glyph: root.netGlyph; color: root.netColor }

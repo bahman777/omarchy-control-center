@@ -51,7 +51,10 @@ Item {
   // IPC / right-click requests: "wifi" expands a menu, "page:sound" opens a page.
   function applyRequest(req) {
     if (!req) return
+    // Menus whose tiles moved to settings pages open those pages instead.
+    var moved = { printers: "printers", scanners: "printers", layout: "windows", wired: "network" }
     if (req.indexOf("page:") === 0) { pageStack = []; openPage(req.slice(5)) }
+    else if (moved[req]) { pageStack = []; openPage(moved[req]) }
     else { pageStack = []; expanded = req }
   }
   Component.onCompleted: {
@@ -421,6 +424,8 @@ Item {
       String(out).split("\n").forEach(function(l) { var f = l.split("\t"); if (!f[0]) return; list.push(f[0]); if (f[1] === "1") active = f[0] })
       q.profiles = list; q.profile = active
     })
+    refreshCharge()
+    refreshKbd()
     qc.runner.run(["omarchy-capture-screenrecording", "--status"], function(code) { q.recording = code === 0 })
     qc.runner.run(["omarchy-reminder", "show", "-j"], function(code, out) {
       try { q.reminders = (JSON.parse(out).reminders || []).slice(0, 20) } catch (e) { q.reminders = [] }
@@ -512,7 +517,7 @@ Item {
                   active: tsRunning, hasMenu: true })
     if (vpns.length > 0) {
       var on = vpns.filter(function(v) { return v.active })
-      list.push({ id: "vpn", icon: Icons.shield, title: "VPN", subtitle: on.length ? on[0].name : "Off", active: on.length > 0, hasMenu: true })
+      list.push({ id: "vpn", icon: Icons.shield, title: "VPN", short: on.length ? on[0].name : "VPN", subtitle: on.length ? on[0].name : "Off", active: on.length > 0, hasMenu: true })
     }
     if (profiles.length > 0)
       list.push({ id: "power", icon: profile === "power-saver" ? String.fromCodePoint(0xF032A) : profile === "performance" ? String.fromCodePoint(0xF04C5) : Icons.bolt,
@@ -529,15 +534,18 @@ Item {
     var dndOn = notifActive ? notif.dnd : dnd === "on"
     list.push({ id: "dnd", icon: dndOn ? Icons.bellOff : Icons.bell, title: "Do Not Disturb",
                 subtitle: !notifActive && dnd === "" ? "Unavailable" : dndOn ? "On" : "Off", active: dndOn, hasMenu: false })
-    list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", subtitle: stayAwake ? "Screen stays on" : "Off", active: stayAwake, hasMenu: false })
-    list.push({ id: "airplane", icon: String.fromCodePoint(0xF001D), title: "Airplane Mode", subtitle: airplane ? "On" : "Off", active: airplane, hasMenu: false })
-    list.push({ id: "record", icon: recording ? String.fromCodePoint(0xF044A) : String.fromCodePoint(0xF0A1C), title: "Screen Record",
+    list.push({ id: "awake", icon: String.fromCodePoint(0xF0176), title: "Stay Awake", short: "Awake", subtitle: stayAwake ? "Screen stays on" : "Off", active: stayAwake, hasMenu: false })
+    list.push({ id: "airplane", icon: String.fromCodePoint(0xF001D), title: "Airplane Mode", short: "Airplane", subtitle: airplane ? "On" : "Off", active: airplane, hasMenu: false })
+    list.push({ id: "record", icon: recording ? String.fromCodePoint(0xF044A) : String.fromCodePoint(0xF0A1C), title: "Screen Record", short: "Record",
                 subtitle: recording ? "Recording — click to stop" : "Off", active: recording, hasMenu: true })
-    list.push({ id: "reminders", icon: String.fromCodePoint(0xF0020), title: "Reminders",
+    list.push({ id: "reminders", icon: String.fromCodePoint(0xF0020), title: "Reminders", short: "Reminders",
                 subtitle: reminders.length ? reminders.length + " · next " + (reminders.slice().sort(function(a, b) { return a.remainingSeconds - b.remainingSeconds })[0].atTime || "") : "None set",
                 active: reminders.length > 0, hasMenu: true, menuOnly: true })
-    list.push({ id: "sudo", icon: String.fromCodePoint(0xF0FC5), title: "Passwordless Sudo",
+    list.push({ id: "sudo", icon: String.fromCodePoint(0xF0FC5), title: "Passwordless Sudo", short: "Sudo",
                 subtitle: sudoFree ? "On — sudo asks no password" : "Off", active: sudoFree, hasMenu: true })
+    if (chargeLimit > 0)
+      list.push({ id: "charge", icon: chargeLimit >= 100 ? Icons.batteryCharging : String.fromCodePoint(0xF0081), title: "Full Charge",
+                  short: chargeLimit >= 100 ? "Charge 100%" : "Limit " + chargeLimit + "%", subtitle: "", active: chargeLimit >= 100, hasMenu: false })
     list.push({ id: "layout", icon: Icons.windows, title: "Window Layout", subtitle: wsLayout ? wsLayout.charAt(0).toUpperCase() + wsLayout.slice(1) : "—", active: false, hasMenu: true })
     list.push({ id: "printers", icon: Icons.printer, title: "Printers",
                 subtitle: jobs.length ? jobs.length + (jobs.length === 1 ? " job" : " jobs") : (printers.filter(function(p) { return p.isDefault })[0] || {}).name || (printers.length ? printers.length + (printers.length === 1 ? " printer" : " printers") : "None"),
@@ -557,12 +565,15 @@ Item {
     case "display": return "Displays, arrangement and mirroring"
     case "record": return p.active ? "Stop the recording" : "Record a region of the screen"
     case "reminders": return "Set, see and cancel reminders"
-    case "sudo": return p.active ? "Require a password for sudo again" : "Let sudo run without a password for a while"
     case "layout": return "Cycle this workspace: dwindle → scrolling → floating"
     case "printers": return "Printers and print jobs"
     case "scanners": return "Find scanners and scan a document"
     case "awake": return p.active ? "Allow the screen to lock and sleep again" : "Keep the screen on: no dimming, lock or screensaver"
     case "airplane": return p.active ? "Turn Wi-Fi and Bluetooth back on" : "Turn off Wi-Fi and Bluetooth"
+    case "charge": return p.active ? "Charging to 100% — click to limit charging to " + savedChargeLimit + "% again"
+      : "Charging stops at " + chargeLimit + "% to protect the battery — click to charge to 100%"
+    case "vpn": return p.active ? "Disconnect " + p.subtitle + " (right-click: all VPNs)" : "Connect a VPN (right-click: choose)"
+    case "sudo": return p.active ? "Require a password for sudo again" : "Let sudo run without a password for a while"
     case "dnd": return p.active ? "Show notification pop-ups again" : "Silence notification pop-ups"
     default: return (p.active ? "Turn off " : "Turn on ") + p.title
     }
@@ -573,11 +584,20 @@ Item {
               sudo: "How long" })[id] || ""
   }
 
+  // Big tiles: the everyday toggles. Small round chips: the rest that are
+  // quick toggles. Wired, printers, scanners and window layout live on their
+  // settings pages (All settings).
+  readonly property var mainIds: ["wifi", "bluetooth", "sound", "tailscale", "power", "display", "night", "dnd"]
+  readonly property var chipIds: ["awake", "airplane", "record", "reminders", "vpn", "sudo", "charge"]
+  readonly property var mainPills: pills.filter(function(p) { return q.mainIds.indexOf(p.id) >= 0 })
+  readonly property var chips: pills.filter(function(p) { return q.chipIds.indexOf(p.id) >= 0 })
   readonly property var pillRows: {
     var rows = []
-    for (var i = 0; i < pills.length; i += 2) rows.push(pills.slice(i, i + 2))
+    for (var i = 0; i < mainPills.length; i += 2) rows.push(mainPills.slice(i, i + 2))
     return rows
   }
+  readonly property int chipCount: chips.length
+  readonly property var chipIdList: chips.map(function(c) { return c.id })
 
   function pillToggle(id) {
     switch (id) {
@@ -620,7 +640,60 @@ Item {
     case "record": if (recording) stopRecording(); else startRecording(false); break
     case "sudo": if (sudoFree) disableSudo(); else toggleMenu("sudo"); break
     case "layout": qc.runner.run(["omarchy-hyprland-workspace-layout-toggle"], function() { q.refreshSlow() }); break
+    case "charge": setChargeLimit(chargeLimit >= 100 ? savedChargeLimit : 100); break
     }
+  }
+
+  // ================================================================ charge limit
+  // The battery's charge stop (charge_control_end_threshold). Read and set
+  // through asusctl when it's there (no password), otherwise straight in
+  // sysfs, writing through pkexec. -1: this machine has no such setting.
+  property int chargeLimit: -1
+  property int savedChargeLimit: 80
+  property string chargeFile: ""
+  property bool hasAsusctl: false
+  readonly property string chargeStateFile: Quickshell.env("HOME") + "/.local/state/omarchy/control-center/charge-limit"
+  function refreshCharge() {
+    qc.runner.run(["sh", "-c", "command -v asusctl >/dev/null && echo asus; ls /sys/class/power_supply/*/charge_control_end_threshold 2>/dev/null | head -1; cat \"$1\" 2>/dev/null", "sh", chargeStateFile], function(code, out) {
+      var lines = String(out).split("\n").map(function(l) { return l.trim() }).filter(function(l) { return l !== "" })
+      q.hasAsusctl = lines.indexOf("asus") >= 0
+      var file = lines.filter(function(l) { return l.indexOf("/sys/") === 0 })[0] || ""
+      q.chargeFile = file
+      var saved = Number(lines.filter(function(l) { return /^\d+$/.test(l) })[0])
+      if (saved >= 20 && saved < 100) q.savedChargeLimit = saved
+      if (!file || !q.hasBattery) { q.chargeLimit = -1; return }
+      q.qc.runner.run(["cat", file], function(c2, v) { var n = parseInt(String(v), 10); q.chargeLimit = c2 === 0 && n > 0 ? n : -1 })
+    })
+  }
+  function setChargeLimit(n) {
+    if (!chargeFile) return
+    var old = chargeLimit
+    if (old > 0 && old < 100)
+      qc.runner.run(["sh", "-c", "mkdir -p \"$(dirname \"$1\")\" && echo \"$2\" > \"$1\"", "sh", chargeStateFile, String(old)], null)
+    chargeLimit = n
+    var cmd = hasAsusctl ? ["asusctl", "battery", "limit", String(n)]
+      : ["pkexec", "sh", "-c", "echo \"$1\" > \"$2\"", "sh", String(n), chargeFile]
+    qc.runner.run(cmd, function(code) { if (code !== 0) q.qc.notify("Battery", "Couldn't change the charge limit"); q.refreshCharge() })
+  }
+
+  // ================================================================ keyboard backlight
+  // Any *kbd_backlight* LED; brightnessctl sets it through logind, no root.
+  property string kbdDevice: ""
+  property int kbdLevel: 0
+  property int kbdMax: 0
+  function refreshKbd() {
+    qc.runner.run(["brightnessctl", "-m", "-c", "leds", "-d", "*kbd_backlight*"], function(code, out) {
+      var f = String(out).trim().split("\n")[0].split(",")
+      if (code !== 0 || f.length < 5 || Number(f[4]) <= 0) { q.kbdDevice = ""; return }
+      q.kbdDevice = f[0]; q.kbdLevel = Number(f[2]); q.kbdMax = Number(f[4])
+    })
+  }
+  function setKbd(frac) {
+    if (!kbdDevice) return
+    var n = Math.max(0, Math.min(kbdMax, Math.round(frac * kbdMax)))
+    if (n === kbdLevel) return
+    kbdLevel = n
+    qc.runner.run(["brightnessctl", "-q", "-d", kbdDevice, "set", String(n)], null)
   }
   function setProfile(p) {
     profile = p
@@ -780,6 +853,20 @@ Item {
         onMoved: function(v) { q.pendingBrightness = v; brightnessApply.restart() }
         onCommitted: function(v) { q.brightness = v; q.pendingBrightness = v; brightnessApply.restart() }
       }
+
+      // Keyboard backlight: steps (often 0–3), so the slider snaps.
+      QsSlider {
+        visible: q.kbdDevice !== "" && q.kbdMax > 0
+        icon: q.kbdLevel > 0 ? String.fromCodePoint(0xF0313) : String.fromCodePoint(0xF12AA)
+        value: q.kbdMax > 0 ? q.kbdLevel / q.kbdMax : 0
+        muted: q.kbdLevel === 0
+        iconTip: q.kbdLevel > 0 ? "Turn the keyboard light off" : "Turn the keyboard light on"
+        valueTip: "Keyboard light " + q.kbdLevel + " of " + q.kbdMax
+        function ccAdjust(dir) { q.setKbd((q.kbdLevel + dir) / q.kbdMax); return true }
+        onIconClicked: q.setKbd(q.kbdLevel > 0 ? 0 : 1)
+        onMoved: function(v) { q.setKbd(v) }
+        onCommitted: function(v) { q.setKbd(v) }
+      }
     }
 
     // ---------------------------------------------------- pill grid
@@ -844,6 +931,47 @@ Item {
               : q.expanded === "sudo" ? sudoMenu : null
           }
         }
+      }
+    }
+
+    // ---------------------------------------------------- small toggles
+    Column {
+      width: parent.width
+      spacing: Style.space(10)
+      visible: q.chipCount > 0
+      readonly property int perRow: Math.min(6, Math.max(4, q.chipCount))
+      Grid {
+        id: chipGrid
+        width: parent.width
+        columns: parent.perRow
+        readonly property real cellW: Math.floor(width / columns)
+        Repeater {
+          // A count, not the chips themselves (see the pill grid).
+          model: q.chipCount
+          delegate: QsChip {
+            required property int index
+            readonly property var modelData: q.chips[index] || ({})
+            width: chipGrid.cellW
+            icon: modelData.icon || ""
+            label: modelData.short || modelData.title || ""
+            active: !!modelData.active
+            hasMenu: !!modelData.hasMenu
+            menuOnly: !!modelData.menuOnly
+            expanded: q.expanded === modelData.id
+            tip: q.pillTip(modelData)
+            onToggled: q.pillToggle(modelData.id)
+            onMenuRequested: q.toggleMenu(modelData.id)
+          }
+        }
+      }
+      Loader {
+        width: parent.width
+        active: q.chipIdList.indexOf(q.expanded) >= 0
+        visible: active
+        sourceComponent: q.expanded === "record" ? recordMenu
+          : q.expanded === "reminders" ? reminderMenu
+          : q.expanded === "vpn" ? vpnMenu
+          : q.expanded === "sudo" ? sudoMenu : null
       }
     }
 

@@ -29,7 +29,9 @@ Column {
     return e.start >= today.dayEnd && e.start < today.dayEnd + 86400000 && (today.cals[e.cal] || {}).enabled !== false
   })
   readonly property bool showTomorrow: todays.length === 0 && tomorrows.length > 0
-  readonly property var shown: (showTomorrow ? tomorrows : todays).slice(0, 3)
+  // Only the next event; the Calendar button has the rest.
+  readonly property var upcoming: showTomorrow ? tomorrows : todays
+  readonly property var shown: upcoming.slice(0, 1)
 
   visible: !!svc && ((svc.calData.calendars || []).length > 0)
   width: parent ? parent.width : 0
@@ -51,7 +53,8 @@ Column {
       anchors.left: parent.left
       anchors.leftMargin: Style.space(4)
       anchors.verticalCenter: parent.verticalCenter
-      text: today.showTomorrow ? "Tomorrow" : "Today  ·  " + Qt.formatDate(new Date(today.now), "dddd, MMMM d")
+      text: (today.showTomorrow ? "Tomorrow" : "Today  ·  " + Qt.formatDate(new Date(today.now), "ddd, MMM d"))
+        + (today.upcoming.length > 1 ? "  ·  " + (today.upcoming.length - 1) + " more" : "")
       color: today.fg
       font.family: Style.font.menuFamily
       font.pixelSize: Style.font.subtitle
@@ -72,8 +75,7 @@ Column {
 
   QsMenuItem {
     visible: today.shown.length === 0
-    text: "Nothing else today"
-    detail: "Nothing tomorrow either"
+    text: "Nothing else today or tomorrow"
     clickable: false
     dim: true
   }
