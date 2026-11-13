@@ -49,7 +49,13 @@ CcPage {
   }
   onDefaultSinkChanged: resolveSink.restart()
   Timer { id: resolveSink; interval: 150; triggeredOnStart: true; running: true
-    onTriggered: page.cc.runner.run(["omarchy-audio-output-sink"], function(code, out) { page.volumeSinkName = String(out).trim() }) }
+    // Only DSP outputs are resolved through (see QuickContent.isDspSink).
+    onTriggered: {
+      var name = page.defaultSink ? String(page.defaultSink.name || "") : ""
+      if (!/^(effect_input\.|omarchy_speaker_tuning|easyeffects_sink)/.test(name)) { page.volumeSinkName = name; return }
+      page.cc.runner.run(["omarchy-audio-output-sink"], function(code, out) { page.volumeSinkName = String(out).trim() })
+    }
+  }
 
   PwObjectTracker { objects: page.sinks.concat(page.sources).concat(page.streams).concat(page.recorders) }
 

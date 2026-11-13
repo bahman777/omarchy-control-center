@@ -243,8 +243,21 @@ Item {
     return defaultSink
   }
   onDefaultSinkChanged: sinkResolve.restart()
+  // omarchy-audio-output-sink resolves a DSP output (speaker tuning, EasyEffects,
+  // a filter chain) to the device it feeds. Only ask it about those: for any
+  // other virtual sink it matches streams by name prefix, and a client stream
+  // that happens to share the sink's name (snapclient's "Snapcast") would make
+  // the speakers look selected.
+  function isDspSink(name) {
+    return /^(effect_input\.|omarchy_speaker_tuning|easyeffects_sink)/.test(String(name || ""))
+  }
   Timer { id: sinkResolve; interval: 150; running: true
-    onTriggered: q.qc.runner.run(["omarchy-audio-output-sink"], function(code, out) { q.volumeSinkName = String(out).trim() }) }
+    onTriggered: {
+      var name = q.defaultSink ? String(q.defaultSink.name || "") : ""
+      if (!q.isDspSink(name)) { q.volumeSinkName = name; return }
+      q.qc.runner.run(["omarchy-audio-output-sink"], function(code, out) { q.volumeSinkName = String(out).trim() })
+    }
+  }
   // Apps playing sound (per-app volume in the Sound menu).
   readonly property var streams: pwNodes.filter(function(n) { return n && n.isStream && n.isSink && n.audio && !q.pwHidden(n) })
   PwObjectTracker { objects: q.sinks.concat(q.sources).concat(q.expanded === "sound" ? q.streams : []) }
