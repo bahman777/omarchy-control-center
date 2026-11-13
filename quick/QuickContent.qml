@@ -488,6 +488,7 @@ Item {
     })
     refreshCharge()
     refreshKbd()
+    refreshFirewall()
     qc.runner.run(["omarchy-capture-screenrecording", "--status"], function(code) { q.recording = code === 0 })
     qc.runner.run(["omarchy-reminder", "show", "-j"], function(code, out) {
       try { q.reminders = (JSON.parse(out).reminders || []).slice(0, 20) } catch (e) { q.reminders = [] }
@@ -611,6 +612,10 @@ Item {
     if (chargeLimit > 0)
       list.push({ id: "charge", icon: chargeLimit >= 100 ? Icons.batteryCharging : String.fromCodePoint(0xF0081), title: "Full Charge",
                   short: chargeLimit >= 100 ? "Charge 100%" : "Limit " + chargeLimit + "%", subtitle: "", active: chargeLimit >= 100, hasMenu: false })
+    if (fwInstalled)
+      list.push({ id: "firewall", icon: Icons.firewall, title: "Firewall", short: "Firewall", subtitle: fwEnabled ? "On" : "Off",
+                  active: fwEnabled, hasMenu: true })
+    list.push({ id: "wallpaper", icon: Icons.wallpaper, title: "Wallpaper", short: "Wallpaper", subtitle: "", active: false, hasMenu: true })
     list.push({ id: "layout", icon: Icons.windows, title: "Window Layout", subtitle: wsLayout ? wsLayout.charAt(0).toUpperCase() + wsLayout.slice(1) : "—", active: false, hasMenu: true })
     list.push({ id: "printers", icon: Icons.printer, title: "Printers",
                 subtitle: jobs.length ? jobs.length + (jobs.length === 1 ? " job" : " jobs") : (printers.filter(function(p) { return p.isDefault })[0] || {}).name || (printers.length ? printers.length + (printers.length === 1 ? " printer" : " printers") : "None"),
@@ -637,6 +642,8 @@ Item {
     case "airplane": return p.active ? "Turn Wi-Fi and Bluetooth back on" : "Turn off Wi-Fi and Bluetooth"
     case "charge": return p.active ? "Charging to 100% — click to limit charging to " + savedChargeLimit + "% again"
       : "Charging stops at " + chargeLimit + "% to protect the battery — click to charge to 100%"
+    case "firewall": return (p.active ? "Turn the firewall off" : "Turn the firewall on") + " (right-click: ports and rules)"
+    case "wallpaper": return "Next wallpaper (right-click: choose one)"
     case "vpn": return p.active ? "Disconnect " + p.subtitle + " (right-click: all VPNs)" : "Connect a VPN (right-click: choose)"
     case "sudo": return p.active ? "Require a password for sudo again" : "Let sudo run without a password for a while"
     case "dnd": return p.active ? "Show notification pop-ups again" : "Silence notification pop-ups"
@@ -653,7 +660,7 @@ Item {
   // quick toggles. Wired, printers, scanners and window layout live on their
   // settings pages (All settings).
   readonly property var mainIds: ["wifi", "bluetooth", "sound", "tailscale", "power", "display", "night", "dnd"]
-  readonly property var chipIds: ["awake", "airplane", "record", "reminders", "vpn", "sudo", "charge"]
+  readonly property var chipIds: ["awake", "airplane", "record", "reminders", "vpn", "firewall", "wallpaper", "sudo", "charge"]
   readonly property var mainPills: pills.filter(function(p) { return q.mainIds.indexOf(p.id) >= 0 })
   readonly property var chips: pills.filter(function(p) { return q.chipIds.indexOf(p.id) >= 0 })
   readonly property var pillRows: {
@@ -706,6 +713,15 @@ Item {
     case "sudo": if (sudoFree) disableSudo(); else toggleMenu("sudo"); break
     case "layout": qc.runner.run(["omarchy-hyprland-workspace-layout-toggle"], function() { q.refreshSlow() }); break
     case "charge": setChargeLimit(chargeLimit >= 100 ? savedChargeLimit : 100); break
+    case "wallpaper": qc.runner.run(["omarchy-theme-bg-next"], null); break
+    case "firewall": {
+      var on = fwEnabled
+      qc.runner.run(["pkexec", "ufw"].concat(on ? ["disable"] : ["--force", "enable"]), function(code) {
+        if (code !== 0) q.qc.toast(code === 126 || code === 127 ? "Cancelled" : "Couldn't change the firewall")
+        q.refreshFirewall()
+      })
+      break
+    }
     }
   }
 
@@ -739,6 +755,17 @@ Item {
     var cmd = hasAsusctl ? ["asusctl", "battery", "limit", String(n)]
       : ["pkexec", "sh", "-c", "echo \"$1\" > \"$2\"", "sh", String(n), chargeFile]
     qc.runner.run(cmd, function(code) { if (code !== 0) q.qc.notify("Battery", "Couldn't change the charge limit"); q.refreshCharge() })
+  }
+
+  // ================================================================ firewall
+  // ufw's state is in a file anyone can read; changing it asks for a password.
+  property bool fwInstalled: false
+  property bool fwEnabled: false
+  function refreshFirewall() {
+    qc.runner.run(["sh", "-c", "command -v ufw >/dev/null || exit 3; grep -q '^ENABLED=yes' /etc/ufw/ufw.conf"], function(code) {
+      q.fwInstalled = code !== 3
+      q.fwEnabled = code === 0
+    })
   }
 
   // ================================================================ keyboard backlight
@@ -1021,7 +1048,8 @@ Item {
       width: parent.width
       spacing: Style.space(10)
       visible: q.chipCount > 0
-      readonly property int perRow: Math.min(6, Math.max(4, q.chipCount))
+      // At most 6 per row, rows filled evenly (8 → 4 + 4, 7 → 4 + 3).
+      readonly property int perRow: { var rows = Math.ceil(q.chipCount / 6); return Math.max(4, Math.ceil(q.chipCount / Math.max(1, rows))) }
       Grid {
         id: chipGrid
         width: parent.width
@@ -1136,7 +1164,8 @@ Item {
     wifi: wifiMenu, bluetooth: btMenu, tailscale: tsMenu, vpn: vpnMenu, power: powerMenu,
     night: nightMenu, sound: soundMenu, display: displayMenu, layout: layoutMenu,
     printers: printerMenu, scanners: scannerMenu, record: recordMenu, reminders: reminderMenu,
-    sudo: sudoMenu, session: sessionMenu, outputs: outputsMenu, inputs: inputsMenu
+    sudo: sudoMenu, session: sessionMenu, outputs: outputsMenu, inputs: inputsMenu,
+    firewall: firewallMenu, wallpaper: wallpaperMenu
   })
   Column {
     id: menuView
@@ -1405,8 +1434,38 @@ Item {
           onClicked: q.qc.runner.run(["nmcli", "connection", modelData.active ? "down" : "up", "id", modelData.name], function() { q.refreshSlow() })
         }
       }
-      QsMenuItem { text: "Network Settings"; separatorAbove: true; onClicked: q.openPage("network") }
+      QsMenuItem { text: "Import a VPN…"; separatorAbove: true; detail: "WireGuard or OpenVPN file"; onClicked: q.openPage("network") }
+      QsMenuItem { text: "Network Settings"; onClicked: q.openPage("network") }
       QsMenuItem { text: "Devices on This Network"; onClicked: q.openPage("devices") }
+    }
+  }
+
+  Component {
+    id: firewallMenu
+    QsMenu {
+      icon: Icons.firewall
+      active: q.fwEnabled
+      title: "Firewall"
+      QsMenuItem {
+        icon: Icons.firewall
+        text: q.fwEnabled ? "On" : "Off"
+        detail: q.fwEnabled ? "Blocking connections you haven't allowed" : "Every connection to this computer is allowed"
+        checked: q.fwEnabled
+        onClicked: q.pillToggle("firewall")
+      }
+      QsMenuItem { text: "Open Ports and Rules"; separatorAbove: true; onClicked: q.openPage("firewall") }
+    }
+  }
+
+  Component {
+    id: wallpaperMenu
+    QsMenu {
+      icon: Icons.wallpaper
+      title: "Wallpaper"
+      WallpaperGrid { runner: q.qc.runner }
+      QsMenuItem { icon: Icons.refresh; text: "Next Wallpaper"; separatorAbove: true; onClicked: q.qc.runner.run(["omarchy-theme-bg-next"], null) }
+      QsMenuItem { icon: Icons.image; text: "Add Your Own…"; detail: "Opens this theme's wallpaper folder"; onClicked: q.qc.launch(["omarchy-theme-bg-install"], 150) }
+      QsMenuItem { text: "Appearance Settings"; onClicked: q.openPage("appearance") }
     }
   }
 

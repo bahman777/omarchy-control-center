@@ -134,6 +134,20 @@ function cleanMonitor(name, cfg) {
   if (!isFinite(scale) || scale < 0.25 || scale > 4) scale = 1
   var out = { mode: mode, position: position, scale: Math.round(scale * 1000) / 1000 }
   if (cfg.mirror && /^[A-Za-z0-9._-]+$/.test(String(cfg.mirror))) out.mirror = String(cfg.mirror)
+  // Per-display extras: rotation, adaptive sync, 10-bit colour, colour mode
+  // (sRGB / wide gamut / HDR) and how bright and saturated normal content is
+  // in HDR. Only written when set.
+  var t = Number(cfg.transform)
+  if (t >= 1 && t <= 7 && Math.floor(t) === t) out.transform = t
+  var vrr = Number(cfg.vrr)
+  if (cfg.vrr !== undefined && (vrr === 0 || vrr === 1 || vrr === 2)) out.vrr = vrr
+  if (Number(cfg.bitdepth) === 10) out.bitdepth = 10
+  if (["auto", "srgb", "wide", "edid", "hdr", "hdredid"].indexOf(String(cfg.cm)) >= 0) out.cm = String(cfg.cm)
+  if (String(out.cm || "").indexOf("hdr") === 0) {
+    var b = Number(cfg.sdrbrightness), s = Number(cfg.sdrsaturation)
+    if (b >= 0.5 && b <= 2) out.sdrbrightness = Math.round(b * 100) / 100
+    if (s >= 0.5 && s <= 1.5) out.sdrsaturation = Math.round(s * 100) / 100
+  }
   return out
 }
 
@@ -143,7 +157,13 @@ function monitorLua(name, cfg) {
   if (c.disabled) return "hl.monitor({ output = " + JSON.stringify(name) + ", disabled = true })"
   return "hl.monitor({ output = " + JSON.stringify(name) + ", mode = " + JSON.stringify(c.mode)
     + ", position = " + JSON.stringify(c.position) + ", scale = " + c.scale
-    + (c.mirror ? ", mirror = " + JSON.stringify(c.mirror) : "") + " })"
+    + (c.mirror ? ", mirror = " + JSON.stringify(c.mirror) : "")
+    + (c.transform ? ", transform = " + c.transform : "")
+    + (c.vrr !== undefined ? ", vrr = " + c.vrr : "")
+    + (c.bitdepth ? ", bitdepth = 10" : "")
+    + (c.cm ? ", cm = " + JSON.stringify(c.cm) : "")
+    + (c.sdrbrightness ? ", sdrbrightness = " + c.sdrbrightness : "")
+    + (c.sdrsaturation ? ", sdrsaturation = " + c.sdrsaturation : "") + " })"
 }
 
 function overridesFile(flat, monitors) {

@@ -78,7 +78,7 @@ CcPage {
     stdout: SplitParser { onRead: function() { refreshSoon.restart() } }
   }
 
-  Component.onCompleted: refresh()
+  Component.onCompleted: { refresh(); findVpnFiles() }
 
   function stateLabel(s) {
     if (s.indexOf("connected") === 0) return "Connected"
@@ -129,7 +129,7 @@ CcPage {
   CcGroup {
     title: "VPN"
     subtitle: page.vpns.length === 0 ? "No VPN profiles in NetworkManager. Tailscale has its own page." : ""
-    header: [ CcButton { text: "Add…"; tooltipText: "Opens nmtui in a terminal"; onClicked: page.cc.launchTerminal("nmtui edit") } ]
+    header: [ CcButton { text: "Set up manually…"; tooltipText: "Opens nmtui in a terminal"; onClicked: page.cc.launchTerminal("nmtui edit") } ]
     Repeater {
       model: page.vpns
       delegate: CcSwitchRow {
@@ -143,6 +143,83 @@ CcPage {
           refreshSoon.restart()
         })
       }
+    }
+  }
+
+  // ------------------------------------------------------------ VPN import
+  // WireGuard (.conf) and OpenVPN (.ovpn) files from Downloads, Documents and
+  // home, or any path, imported with NetworkManager. A WireGuard file's name
+  // becomes the interface name (15 characters max), so a longer one is
+  // copied under a short name to the private runtime folder and removed
+  // right after the import: the file holds a private key.
+  property var vpnFiles: []           // [{ type, path, name }]
+  property bool openvpnSupport: true
+  property bool importing: false
+  function findVpnFiles() {
+    page.cc.runner.run(["sh", "-c",
+      "test -e /usr/lib/NetworkManager/VPN/nm-openvpn-service.name && echo has-openvpn; " +
+      "find \"$HOME/Downloads\" \"$HOME/Documents\" \"$HOME\" -maxdepth 2 -type f \\( -iname '*.ovpn' -o -iname '*.conf' \\) -size -64k 2>/dev/null | " +
+      "while IFS= read -r f; do case \"$f\" in *.ovpn|*.OVPN) echo \"openvpn|$f\";; *) grep -qs '^\\[Interface\\]' \"$f\" && grep -qs 'PrivateKey' \"$f\" && echo \"wireguard|$f\";; esac; done | sort -u | head -20"],
+      function(code, out) {
+        var lines = String(out).split("\n")
+        page.openvpnSupport = lines.indexOf("has-openvpn") >= 0
+        page.vpnFiles = lines.filter(function(l) { return l.indexOf("|") > 0 }).map(function(l) {
+          var i = l.indexOf("|"), path = l.slice(i + 1)
+          return { type: l.slice(0, i), path: path, name: path.replace(/^.*\//, "") }
+        })
+      })
+  }
+  function vpnType(path) { return /\.ovpn$/i.test(path) ? "openvpn" : "wireguard" }
+  function importVpn(path) {
+    path = String(path || "").trim().replace(/^~(?=\/)/, Quickshell.env("HOME"))
+    if (!path || path.indexOf("/") !== 0) { page.cc.toast("Enter the full path to the file"); return }
+    var type = vpnType(path)
+    if (type === "openvpn" && !page.openvpnSupport) { page.cc.toast("Install OpenVPN support first"); return }
+    importing = true
+    var script = type === "wireguard"
+      ? "f=\"$1\"; b=$(basename \"$f\" .conf); n=$(printf '%s' \"$b\" | tr -c 'A-Za-z0-9_-' '_' | cut -c1-15); " +
+        "if [ \"$n\" != \"$b\" ]; then d=\"${XDG_RUNTIME_DIR:-/tmp}/cc-vpn\"; umask 077; mkdir -p \"$d\"; cp \"$f\" \"$d/$n.conf\" || exit 1; " +
+        "nmcli connection import type wireguard file \"$d/$n.conf\"; r=$?; rm -f \"$d/$n.conf\"; exit $r; fi; " +
+        "nmcli connection import type wireguard file \"$f\""
+      : "nmcli connection import type openvpn file \"$1\""
+    page.cc.runner.run(["sh", "-c", script, "sh", path], function(code, out) {
+      page.importing = false
+      if (code === 0) { page.cc.toast("VPN added"); vpnPath.text = ""; refreshSoon.restart() }
+      else page.cc.toast("Couldn't import that file")
+    })
+  }
+
+  CcGroup {
+    title: "Import a VPN"
+    subtitle: page.vpnFiles.length ? "Found in Downloads, Documents and your home folder" : "WireGuard (.conf) or OpenVPN (.ovpn) files from your VPN provider"
+    header: [ CcButton { text: "Look again"; onClicked: page.findVpnFiles() } ]
+    CcRow {
+      visible: !page.openvpnSupport && page.vpnFiles.some(function(f) { return f.type === "openvpn" })
+      icon: Icons.info
+      title: "OpenVPN support isn't installed"
+      subtitle: "WireGuard works without it"
+      CcButton { text: "Install"; onClicked: page.cc.launchTerminal("omarchy-pkg-add networkmanager-openvpn") }
+    }
+    Repeater {
+      model: page.vpnFiles
+      delegate: CcRow {
+        required property var modelData
+        icon: Icons.vpn
+        title: modelData.name
+        subtitle: (modelData.type === "wireguard" ? "WireGuard" : "OpenVPN") + " · " + modelData.path.replace(Quickshell.env("HOME"), "~").replace(/\/[^\/]*$/, "")
+        CcButton { text: "Import"; enabled: !page.importing && (modelData.type === "wireguard" || page.openvpnSupport); onClicked: page.importVpn(modelData.path) }
+      }
+    }
+    CcRow {
+      title: "Another file"
+      subtitle: "Full path to a .conf or .ovpn file"
+      TextField {
+        id: vpnPath
+        width: Style.space(220)
+        placeholderText: "~/vpn/home.conf"
+        onAccepted: page.importVpn(text)
+      }
+      CcButton { text: "Import"; enabled: !page.importing && vpnPath.text.trim() !== ""; onClicked: page.importVpn(vpnPath.text) }
     }
   }
 

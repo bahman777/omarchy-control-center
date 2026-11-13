@@ -76,6 +76,15 @@ CcPage {
     if (m.disabled) return { disabled: true }
     var c = { mode: modeOf(m), position: m.x + "x" + m.y, scale: m.scale }
     if (mirrored(m)) c.mirror = String(m.mirrorOf)
+    // Keep what the display is doing now, so changing one thing (say the
+    // scale) doesn't reset rotation, sync or colour.
+    if (Number(m.transform) > 0) c.transform = Number(m.transform)
+    var saved = (cc.hypr.monitors || {})[keyOf(m)] || {}
+    c.vrr = saved.vrr !== undefined ? saved.vrr : (m.vrr ? 1 : 0)
+    if (/2101010/.test(String(m.currentFormat || ""))) c.bitdepth = 10
+    if (m.colorManagementPreset) c.cm = String(m.colorManagementPreset)
+    if (m.sdrBrightness) c.sdrbrightness = Number(m.sdrBrightness)
+    if (m.sdrSaturation) c.sdrsaturation = Number(m.sdrSaturation)
     return c
   }
 
@@ -95,8 +104,7 @@ CcPage {
   }
   function tryMonitor(m, change) {
     var prev = currentCfg(m)
-    var next = { mode: change.mode || prev.mode, position: prev.position, scale: change.scale || prev.scale }
-    if (prev.mirror) next.mirror = prev.mirror
+    var next = Object.assign({}, prev, change)
     tryMany([{ m: m, next: next }])
   }
   function keep() {
@@ -352,6 +360,44 @@ CcPage {
           return best
         }
         onPicked: function(v) { if (Math.abs(Number(v) - mon.modelData.scale) > 0.001) page.tryMonitor(mon.modelData, { scale: Number(v) }) }
+      }
+      CcChoiceRow {
+        visible: !mon.modelData.disabled
+        title: "Rotation"
+        options: [{ value: "0", label: "Normal" }, { value: "1", label: "90°" }, { value: "2", label: "180°" }, { value: "3", label: "270°" }]
+        value: String((Number(mon.modelData.transform) || 0) % 4)
+        onPicked: function(v) { page.tryMonitor(mon.modelData, { transform: Number(v) }) }
+      }
+      CcChoiceRow {
+        visible: !mon.modelData.disabled
+        title: "Adaptive sync (VRR)"
+        subtitle: "Matches the refresh rate to games and video; can flicker on some panels"
+        options: [{ value: "0", label: "Off" }, { value: "1", label: "On" }, { value: "2", label: "Fullscreen" }]
+        value: String(page.currentCfg(mon.modelData).vrr)
+        onPicked: function(v) { page.tryMonitor(mon.modelData, { vrr: Number(v) }) }
+      }
+      CcChoiceRow {
+        visible: !mon.modelData.disabled
+        title: "Colour depth"
+        subtitle: "10-bit gives smoother gradients, if the display supports it"
+        options: [{ value: "8", label: "8-bit" }, { value: "10", label: "10-bit" }]
+        value: /2101010/.test(String(mon.modelData.currentFormat || "")) ? "10" : "8"
+        onPicked: function(v) { page.tryMonitor(mon.modelData, { bitdepth: Number(v) }) }
+      }
+      CcChoiceRow {
+        visible: !mon.modelData.disabled
+        title: "Colour mode"
+        subtitle: "HDR needs a display that supports it"
+        options: [{ value: "auto", label: "Auto" }, { value: "srgb", label: "sRGB" }, { value: "wide", label: "Wide" }, { value: "hdr", label: "HDR" }]
+        value: { var p = String(mon.modelData.colorManagementPreset || "auto"); return p === "hdredid" ? "hdr" : (["auto", "srgb", "wide", "hdr"].indexOf(p) >= 0 ? p : "auto") }
+        onPicked: function(v) { page.tryMonitor(mon.modelData, { cm: v }) }
+      }
+      CcSliderRow {
+        visible: !mon.modelData.disabled && String(mon.modelData.colorManagementPreset || "").indexOf("hdr") === 0
+        title: "Brightness of normal content in HDR"
+        from: 0.5; to: 2
+        value: Number(mon.modelData.sdrBrightness) || 1
+        onCommitted: function(v) { page.tryMonitor(mon.modelData, { sdrbrightness: v }) }
       }
       CcSliderRow {
         visible: mon.internal && page.brightness >= 0

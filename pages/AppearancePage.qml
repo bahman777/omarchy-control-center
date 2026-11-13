@@ -3,6 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "../ui"
+import "../quick" as Quick
 import "../Icons.js" as Icons
 
 // Omarchy theme, background, font, bar and window corners.
@@ -73,9 +74,20 @@ CcPage {
     CcRow {
       icon: Icons.image
       title: "Background"
-      subtitle: "Pick from the current theme's backgrounds"
-      CcButton { text: "Next"; onClicked: page.cc.runner.run(["omarchy-theme-bg-next"], null) }
-      CcButton { text: "Choose…"; tooltipText: "Opens Omarchy's background picker"; onClicked: { page.cc.launch(["omarchy-theme-bg-switcher"]) } }
+      subtitle: "The current theme's backgrounds and your own"
+      CcButton { text: "Next"; onClicked: page.cc.runner.run(["omarchy-theme-bg-next"], function() { bgGrid.refresh() }) }
+      CcButton { text: "Add your own…"; tooltipText: "Opens this theme's wallpaper folder"; onClicked: page.cc.launch(["omarchy-theme-bg-install"]) }
+    }
+    Item {
+      width: parent ? parent.width : 0
+      height: bgGrid.implicitHeight + Style.space(16)
+      Quick.WallpaperGrid {
+        id: bgGrid
+        x: Style.space(12); y: Style.space(4)
+        width: parent.width - Style.space(24)
+        runner: page.cc.runner
+        columns: 4
+      }
     }
   }
 

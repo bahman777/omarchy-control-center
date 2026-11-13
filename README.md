@@ -11,12 +11,16 @@ Control Center gives [Omarchy](https://omarchy.org) Quattro a polished, GNOME- a
 ## Highlights
 
 - **A bar that tells you things.** Wi-Fi turns green with live signal bars, Bluetooth turns blue when something is connected, Tailscale shows its own nine-dot mark (dim when disconnected), the speaker has a tiny volume meter, and the battery shows its level, a charging bolt when plugged in, and turns orange at 20% and red at 10%. An orange camera or microphone appears while any app is using them, and hovering tells you which.
-- **Quick Settings that fit on screen.** Eight big tiles (Wi-Fi, Bluetooth, Sound, Tailscale, Power Mode, Displays, Night Light, Do Not Disturb), a row of small round toggles (Stay Awake, Airplane, Screen Record, Reminders, VPN, Passwordless Sudo, battery charge limit), and sliders for volume, microphone, screen brightness and keyboard backlight.
+- **Quick Settings that fit on screen.** Eight big tiles (Wi-Fi, Bluetooth, Sound, Tailscale, Power Mode, Displays, Night Light, Do Not Disturb), a row of small round toggles (Stay Awake, Airplane, Screen Record, Reminders, VPN, Firewall, Wallpaper, Passwordless Sudo, battery charge limit), and sliders for volume, microphone, screen brightness and keyboard backlight.
 - **Menus that slide in, not pile up.** A tile's arrow swaps the panel for its menu, like macOS Control Center: networks with inline passwords, Bluetooth devices with battery levels, Tailscale exit nodes, sound devices and per-app volume, Night Light schedule and warmth, and more. Back (or `Esc`) slides you out again.
 - **Now Playing.** Album art, title, a seekable progress bar and transport controls for any MPRIS player, with a switcher when several are running. *Previous* restarts the song the way you expect, and the card lingers for 30 seconds after you pause so you can pick up where you left off.
 - **Today at a glance.** Your next event from any iCal calendar, with a **Join** button 15 minutes before a Meet, Zoom or Teams call, plus a month-view Calendar page and meeting reminders.
 - **A real notification center** (optional): pop-ups with action buttons and inline replies, Do Not Disturb that also lights Omarchy's bar indicator, and a history that survives shell restarts.
-- **A full settings app in the panel:** Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Printers & Scanners, Network Devices, Power, Windows & Layout, Keyboard & Mouse, Appearance, Calendar, Notifications and System, with search.
+- **A full settings app in the panel:** Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Printers & Scanners, Firewall, Network Devices, Power, Windows & Layout, Keyboard & Mouse, Appearance, Calendar, Notifications and System, with search.
+- **Firewall without the terminal.** Turn ufw on or off, choose what happens to unexpected connections, see every rule in plain words ("Port 8080 TCP · from 192.168.1.0/24"), remove one, or open a port for your local network or the internet.
+- **Wallpaper at a click.** Next wallpaper from Quick Settings, or pick one from thumbnails of the current theme's backgrounds and your own.
+- **Import a VPN.** Drop in a WireGuard `.conf` or OpenVPN `.ovpn` file from your provider; Control Center finds it in Downloads, Documents or your home folder and adds it to NetworkManager.
+- **Every display, its own way.** Resolution, scale, rotation, adaptive sync (VRR), 10-bit colour, colour mode (sRGB, wide gamut, HDR) and HDR brightness per monitor, remembered per monitor whichever port it's plugged into, with a 15-second "Keep changes?" safety net.
 - **Glass and motion.** Soft highlights, raised knobs, glossy check badges and short slide transitions, in your theme's colours.
 - **Keyboard-first.** Arrows or `h j k l` move, `Tab` walks everything, `Enter` activates, `←`/`→` adjust sliders, `Esc` steps back.
 
@@ -81,7 +85,7 @@ The plugin is careful about your configuration:
 - **Night Light** writes `~/.config/hypr/hyprsunset.conf` only when you change its schedule, keeping your original.
 - **Idle timers** go to the `idle` section of `~/.config/omarchy/shell.json`.
 - Wherever Omarchy has a command (`omarchy-bluetooth-power`, `omarchy-powerprofiles-set`, `omarchy-dns`, `omarchy-theme-set`, …) the plugin uses it, so it behaves exactly like Omarchy's own menus.
-- Actions that need administrator rights (DNS, time zone, adding printers, the generic charge limit) go through Omarchy's polkit password prompt. **Passwordless Sudo** uses Omarchy's own `omarchy-sudo-passwordless`, with its confirmation, and can be turned off from the panel.
+- Actions that need administrator rights (DNS, time zone, adding printers, firewall changes, the generic charge limit) go through Omarchy's polkit password prompt. Reading the firewall's state and rules needs no password. **Passwordless Sudo** uses Omarchy's own `omarchy-sudo-passwordless`, with its confirmation, and can be turned off from the panel.
 - The plugin makes **no network requests of its own** apart from fetching the iCal calendar links you add; the Wi-Fi speed test runs Omarchy's own `omarchy-network-speedtest`, and only when you start it. Commands run with argument lists, never shell strings built from data.
 
 ## Requirements
@@ -94,6 +98,8 @@ The plugin is careful about your configuration:
   - `solaar` for Logitech Unifying/Bolt battery levels
   - CUPS (`lpstat`, `system-config-printer`), SANE (`scanimage`) and `simple-scan` for printers and scanners
   - `asusctl` for the password-free charge limit on ASUS laptops
+  - `ufw` for the firewall (the Firewall page offers to install it)
+  - `networkmanager-openvpn` to import OpenVPN files (WireGuard needs nothing extra; the page offers to install it)
 
 Anything that isn't installed or isn't present on your hardware simply doesn't appear: no keyboard backlight means no slider, no VPN means no VPN toggle, and so on.
 
