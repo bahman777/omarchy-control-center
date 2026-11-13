@@ -811,7 +811,7 @@ Item {
     }
 
     // ---------------------------------------------------- now playing
-    NowPlaying { id: nowPlaying; show: q.qc.showNowPlaying }
+    NowPlaying { id: nowPlaying; show: q.qc.showNowPlaying; store: q.qc }
 
     // ---------------------------------------------------- sliders
     Column {

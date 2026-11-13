@@ -25,9 +25,64 @@ Rectangle {
   readonly property bool hasTrack: !!player && String(player.trackTitle || "") !== ""
   readonly property color fg: Color.menu.text
 
+  // The last track shown, kept by the bar widget (this card is rebuilt each
+  // time the panel opens). When the player stops — end of the queue, say —
+  // the card keeps showing it through the grace period, with Play to resume.
+  property var store: null
+  onPlayerChanged: rememberTrack()
+  onHasTrackChanged: rememberTrack()
+  Connections {
+    target: np.player
+    ignoreUnknownSignals: true
+    function onTrackTitleChanged() { np.rememberTrack() }
+    function onTrackArtUrlChanged() { np.rememberTrack() }
+  }
+  function rememberTrack() {
+    if (!store || !hasTrack) return
+    store.lastTrack = { title: String(player.trackTitle || ""), artist: String(player.trackArtist || ""),
+                        album: String(player.trackAlbum || ""), art: String(player.trackArtUrl || ""), name: String(player.dbusName || "") }
+  }
+  readonly property var snap: store ? store.lastTrack : null
+  readonly property bool fromSnap: !hasTrack && !!snap
+  readonly property string dTitle: hasTrack ? String(player.trackTitle || "") : fromSnap ? snap.title : ""
+  readonly property string dSub: hasTrack ? [player.trackArtist, player.trackAlbum].filter(function(x) { return x }).join(" · ")
+    : fromSnap ? [snap.artist, snap.album].filter(function(x) { return x }).join(" · ") : ""
+  readonly property string dArt: hasTrack ? String(player.trackArtUrl || "") : fromSnap ? snap.art : ""
+  function findPlayer(name) {
+    var all = Mpris.players ? Mpris.players.values : []
+    for (var i = 0; i < all.length; i++) if (all[i] && all[i].dbusName === name) return all[i]
+    return null
+  }
+
+  // Previous, the way most players do it: more than 3 s in, back to the start
+  // of this track. Otherwise the previous track; if the player stops instead
+  // (Mopidy on the first track of its queue), start it again.
+  function goPrevious() {
+    var p = player
+    if (!p) return
+    if (p.canSeek && p.position > 3) { p.position = 0; return }
+    restartGuard.name = String(p.dbusName || "")
+    p.previous()
+    restartGuard.restart()
+  }
+  Timer {
+    id: restartGuard
+    property string name: ""
+    interval: 1500
+    onTriggered: {
+      var p = np.findPlayer(name)
+      if (p && p.playbackState === MprisPlaybackState.Stopped && p.canPlay) p.play()
+    }
+  }
+  function playPause() {
+    if (player && player.canTogglePlaying) { player.togglePlaying(); return }
+    var p = fromSnap ? findPlayer(snap.name) : null
+    if (p && p.canPlay) p.play()
+  }
+
   // Set by the panel: false once nothing has played for 30 s.
   property bool show: true
-  visible: hasTrack && show
+  visible: (hasTrack || fromSnap) && show
   width: parent ? parent.width : 0
   height: visible ? content.implicitHeight + Style.space(20) : 0
   radius: Math.max(10, Style.cornerRadius)
@@ -64,7 +119,7 @@ Rectangle {
       color: Qt.rgba(np.fg.r, np.fg.g, np.fg.b, 0.10)
       Image {
         anchors.fill: parent
-        source: np.player ? String(np.player.trackArtUrl || "") : ""
+        source: np.dArt
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
         sourceSize.width: 160
@@ -73,7 +128,7 @@ Rectangle {
       }
       Text {
         anchors.centerIn: parent
-        visible: !np.player || !np.player.trackArtUrl
+        visible: np.dArt === ""
         text: String.fromCodePoint(0xF0387)
         color: Qt.rgba(np.fg.r, np.fg.g, np.fg.b, 0.5)
         font.family: Style.font.family
@@ -93,7 +148,7 @@ Rectangle {
           anchors.left: parent.left
           anchors.right: switcher.visible ? switcher.left : parent.right
           anchors.rightMargin: switcher.visible ? Style.space(6) : 0
-          text: np.player ? String(np.player.trackTitle || "") : ""
+          text: np.dTitle
           textFormat: Text.PlainText
           elide: Text.ElideRight
           color: np.fg
@@ -133,7 +188,7 @@ Rectangle {
       }
       Text {
         width: parent.width
-        text: np.player ? [np.player.trackArtist, np.player.trackAlbum].filter(function(x) { return x }).join(" · ") : ""
+        text: np.dSub
         textFormat: Text.PlainText
         elide: Text.ElideRight
         visible: text !== ""
@@ -193,14 +248,14 @@ Rectangle {
             icon: String.fromCodePoint(0xF04AE)
             tip: "Previous"
             opacity: np.player && np.player.canGoPrevious ? 1 : 0.4
-            onClicked: if (np.player && np.player.canGoPrevious) np.player.previous()
+            onClicked: if (np.player && np.player.canGoPrevious) np.goPrevious()
           }
           QsRoundButton {
             width: Style.space(32)
             active: true
             icon: np.player && np.player.isPlaying ? String.fromCodePoint(0xF03E4) : String.fromCodePoint(0xF040A)
             tip: np.player && np.player.isPlaying ? "Pause" : "Play"
-            onClicked: if (np.player && np.player.canTogglePlaying) np.player.togglePlaying()
+            onClicked: np.playPause()
           }
           QsRoundButton {
             width: Style.space(32)

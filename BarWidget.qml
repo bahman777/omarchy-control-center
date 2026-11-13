@@ -112,6 +112,8 @@ Panel {
   // The Now Playing card stays for 30 s after the music pauses or stops, then
   // goes away. Kept here because the panel's contents are rebuilt on open.
   property bool musicLinger: false
+  // Last track the Now Playing card showed (see quick/NowPlaying.qml).
+  property var lastTrack: null
   onPlayingChanged: {
     if (playing) { musicLinger = false; musicLingerTimer.stop() }
     else { musicLinger = true; musicLingerTimer.restart() }
