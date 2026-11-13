@@ -258,6 +258,25 @@ Item {
       q.qc.runner.run(["omarchy-audio-output-sink"], function(code, out) { q.volumeSinkName = String(out).trim() })
     }
   }
+  // Another output still playing while a different one is selected: the
+  // laptop speakers carrying this machine's share of a Snapcast group, say.
+  // Its volume isn't the main slider's, so it gets a small slider of its own.
+  readonly property var alsoPlayingSink: {
+    var groups = Pipewire.linkGroups ? Pipewire.linkGroups.values : []
+    for (var i = 0; i < groups.length; i++) {
+      var g = groups[i]
+      if (!g || !g.source || !g.target) continue
+      var t = g.target
+      if (!g.source.isStream || !t.isSink || t.isStream) continue
+      if ((defaultSink && t.id === defaultSink.id) || (volumeSink && t.id === volumeSink.id)) continue
+      if (sinks.indexOf(t) < 0) continue   // hidden: tuning chains, level meters
+      return t
+    }
+    return null
+  }
+  readonly property real alsoVolume: alsoPlayingSink && alsoPlayingSink.audio ? alsoPlayingSink.audio.volume : 0
+  readonly property bool alsoMuted: !!(alsoPlayingSink && alsoPlayingSink.audio && alsoPlayingSink.audio.muted)
+
   // Apps playing sound (per-app volume in the Sound menu).
   readonly property var streams: pwNodes.filter(function(n) { return n && n.isStream && n.isSink && n.audio && !q.pwHidden(n) })
   PwObjectTracker { objects: q.sinks.concat(q.sources).concat(q.expanded === "sound" ? q.streams : []) }
@@ -823,6 +842,34 @@ Item {
           }
         }
         QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
+      }
+
+      Column {
+        width: parent.width
+        visible: !!q.alsoPlayingSink
+        spacing: Style.space(2)
+        Text {
+          x: Style.space(48)
+          width: parent.width - x
+          elide: Text.ElideRight
+          textFormat: Text.PlainText
+          text: "Also playing on " + q.nodeLabel(q.alsoPlayingSink)
+          color: Qt.rgba(q.fg.r, q.fg.g, q.fg.b, 0.7)
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.bodySmall
+        }
+        QsSlider {
+          icon: q.alsoMuted || q.alsoVolume <= 0.001 ? Icons.volumeOff : Icons.speaker
+          value: q.alsoVolume
+          to: 1
+          muted: q.alsoMuted
+          ccFocusable: visible && parent.visible
+          iconTip: q.alsoMuted ? "Unmute" : "Mute"
+          valueTip: q.nodeLabel(q.alsoPlayingSink) + " " + Math.round(q.alsoVolume * 100) + "%"
+          onIconClicked: if (q.alsoPlayingSink && q.alsoPlayingSink.audio) q.alsoPlayingSink.audio.muted = !q.alsoPlayingSink.audio.muted
+          onMoved: function(v) { if (q.alsoPlayingSink && q.alsoPlayingSink.audio) { q.alsoPlayingSink.audio.volume = v; if (v > 0) q.alsoPlayingSink.audio.muted = false } }
+          onCommitted: function(v) { if (q.alsoPlayingSink && q.alsoPlayingSink.audio) q.alsoPlayingSink.audio.volume = v }
+        }
       }
 
       QsSlider {
