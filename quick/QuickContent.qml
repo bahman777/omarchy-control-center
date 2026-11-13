@@ -50,6 +50,11 @@ Item {
   }
   function currentView() { return page !== "" ? pageView : expanded !== "" ? menuView : col }
 
+  // Pages that need something this computer may not have (hyprglass).
+  function visiblePages(query) {
+    return Pages.filter(query).filter(function(p) { return !p.needs || (p.needs === "hyprglass" && q.qc.hasHyprglass) })
+  }
+
   function toggleMenu(id) {
     navDir = expanded === id ? -1 : 1
     expanded = expanded === id ? "" : id
@@ -1278,14 +1283,14 @@ Item {
         function ccActivate() { forceActiveFocus() }
         Component.onCompleted: q.searchField = search
         Keys.onReturnPressed: {
-          var hits = Pages.filter(text)
+          var hits = q.visiblePages(text)
           if (hits.length) q.openPage(hits[0].id)
         }
         Keys.onDownPressed: function(e) { q.qc.focusKeys(); q.moveCursor(0, 1); e.accepted = true }
       }
       QsMenu {
         Repeater {
-          model: Pages.filter(search.text)
+          model: q.visiblePages(search.text)
           delegate: QsMenuItem {
             required property var modelData
             icon: modelData.icon
@@ -1294,7 +1299,7 @@ Item {
             onClicked: q.openPage(modelData.id)
           }
         }
-        QsMenuItem { visible: Pages.filter(search.text).length === 0; text: "No matching settings"; clickable: false; dim: true }
+        QsMenuItem { visible: q.visiblePages(search.text).length === 0; text: "No matching settings"; clickable: false; dim: true }
       }
     }
   }

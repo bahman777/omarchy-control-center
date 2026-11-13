@@ -106,6 +106,13 @@ Panel {
     return null
   }
   // Audio output switch used by the Sound menu and page (see tools/audio-output.sh).
+  // hyprglass loaded? (shows the Glass settings page)
+  property bool hasHyprglass: false
+  Timer {
+    interval: 20000; running: true; repeat: true; triggeredOnStart: true
+    onTriggered: root.runner.run(["sh", "-c", "hyprctl plugin list 2>/dev/null | grep -qi hyprglass"], function(code) { root.hasHyprglass = code === 0 })
+  }
+
   // ------------------------------------------------------------ airplane mode
   // Like Apple's: Wi-Fi goes off; Bluetooth stays on while a device (a
   // headset, say) is connected. Turning Wi-Fi or Bluetooth back on while in

@@ -15,6 +15,7 @@ var PAGES = [
   { id: "power",         title: "Power",            icon: Icons.batteryCharging, file: "PowerPage.qml",         keys: "battery power mode profile performance saver idle lock screensaver suspend shutdown reboot" },
   { id: "windows",       title: "Windows & Layout", icon: Icons.windows,         file: "WindowsPage.qml",       keys: "hyprland tiling layout dwindle master scrolling gaps borders rounding blur shadow animations opacity focus workspaces" },
   { id: "input",         title: "Keyboard & Mouse", icon: Icons.keyboard,        file: "InputPage.qml",         keys: "keyboard layout repeat mouse touchpad trackpad scroll natural tap sensitivity" },
+  { id: "glass",         title: "Glass",            icon: Icons.glass,         file: "GlassPage.qml",         needs: "hyprglass", keys: "glass hyprglass bevel blur frosted liquid transparency opacity refraction lens tint border" },
   { id: "appearance",    title: "Appearance",       icon: Icons.palette,         file: "AppearancePage.qml",    keys: "theme dark light font background wallpaper bar position corners" },
   { id: "calendar",      title: "Calendar",         icon: Icons.calendar,        file: "CalendarPage.qml",      keys: "calendar events meetings agenda google ical ics schedule month" },
   { id: "notifications", title: "Notifications",    icon: Icons.bell,            file: "NotificationsPage.qml", keys: "do not disturb dnd silence alerts" },

@@ -20,7 +20,7 @@ var computer = g(0xF0379), watch = g(0xF0597), gamepad = g(0xF0297), printer = g
 var app = g(0xF003B), clock = g(0xF0954), translate = g(0xF05CA), harddisk = g(0xF02CA)
 var chip = g(0xF061A), memory = g(0xF035B), image = g(0xF02E9), formatFont = g(0xF0284)
 var server = g(0xF048B), dots = g(0xF01D8), exit = g(0xF0206), shield = g(0xF0498)
-var wallpaper = g(0xF02F9), firewall = g(0xF0565)
+var wallpaper = g(0xF02F9), firewall = g(0xF0565), glass = g(0xF00B5)
 var sleep = g(0xF04B2), restart = g(0xF0709), logout = g(0xF0343), eye = g(0xF0208)
 
 function wifiStrength(s) {

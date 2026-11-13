@@ -21,6 +21,7 @@ Control Center gives [Omarchy](https://omarchy.org) Quattro a polished, GNOME- a
 - **Wallpaper at a click.** Next wallpaper from Quick Settings, or pick one from thumbnails of the current theme's backgrounds and your own.
 - **Import a VPN.** Drop in a WireGuard `.conf` or OpenVPN `.ovpn` file from your provider; Control Center finds it in Downloads, Documents or your home folder and adds it to NetworkManager.
 - **Every display, its own way.** Resolution, scale, rotation, adaptive sync (VRR), 10-bit colour, colour mode (sRGB, wide gamut, HDR) and HDR brightness per monitor, remembered per monitor whichever port it's plugged into, with a 15-second "Keep changes?" safety net.
+- **Tune hyprglass live.** With the [hyprglass](https://github.com/hyprnux/hyprglass) plugin loaded, a Glass page exposes every setting (blur, tint, lens edge, refraction, rainbow fringe, edge glow, bevel size, colour, angle and shadow, shine, focus light, colour tone, frost, grain) and applies each change to your windows as you drag, starting from your own preset. Save keeps the look; Revert goes back. It also explains what makes the glass visible: the bevel is drawn inside the window, so borders can stay; window opacity is what lets it through.
 - **Glass and motion.** Soft highlights, raised knobs, glossy check badges and short slide transitions, in your theme's colours.
 - **Keyboard-first.** Arrows or `h j k l` move, `Tab` walks everything, `Enter` activates, `←`/`→` adjust sliders, `Esc` steps back.
 

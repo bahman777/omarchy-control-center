@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
 import "HyprSpec.js" as Spec
+import "GlassSpec.js" as Glass
 
 // Live view of the Hyprland options the Control Center exposes. Reads with
 // `hyprctl getoption`, writes live with `hyprctl eval`, and persists what the
@@ -17,6 +18,8 @@ Item {
   property var values: ({})
   property var overrides: ({})
   property var monitors: ({})
+  // hyprglass look saved from the Glass page ({ setting: value }), or null.
+  property var glass: null
   property bool loaded: false
   property string lastError: ""
 
@@ -62,7 +65,7 @@ Item {
   // hyprland.lua only loads control-center.lua after the user agrees to it
   // (installInclude). Until then changes are live for this session only.
   property bool includeInstalled: false
-  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0
+  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0 || !!glass
   readonly property bool sessionOnly: hasChanges && !includeInstalled
 
   function checkInclude() {
@@ -97,10 +100,28 @@ Item {
     return true
   }
 
+  // Glass: applied live as the plugin's global settings; `persist` saves it
+  // as a preset in control-center.lua (null clears it).
+  function previewGlass(values) {
+    runner.run(["hyprctl", "eval", Glass.liveSnippet(values)], function(code, out) {
+      root.lastError = String(out).indexOf("error") === 0 ? String(out).trim() : ""
+    })
+  }
+  function saveGlass(values) {
+    var clean = null
+    if (values) {
+      clean = {}
+      Glass.SETTINGS.forEach(function(s) { var v = Glass.clean(s.key, values[s.key]); if (v !== undefined) clean[s.key] = v })
+    }
+    glass = clean
+    persistTimer.restart()
+  }
+
   function resetAll() {
     overrides = ({})
     monitors = ({})
-    stateFile.setText("{\"options\": {}, \"monitors\": {}}\n")
+    glass = null
+    stateFile.setText("{\"options\": {}, \"monitors\": {}, \"glass\": null}\n")
     luaFile.setText("-- Control Center: no window settings overridden.\n")
     runner.run(["hyprctl", "reload"], function() { refreshLater.restart() })
   }
@@ -109,8 +130,9 @@ Item {
     id: persistTimer
     interval: 600
     onTriggered: {
-      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors }, null, 2) + "\n")
-      luaFile.setText(Spec.overridesFile(root.overrides, root.monitors))
+      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors, glass: root.glass }, null, 2) + "\n")
+      luaFile.setText(Spec.overridesFile(root.overrides, root.monitors)
+        + (root.glass ? "\n-- Glass look (hyprglass), from the Glass page\n" + Glass.savedLua(root.glass) : ""))
     }
   }
 
@@ -141,6 +163,11 @@ Item {
           if (c) mons[m] = c
         }
         root.monitors = mons
+        if (o.glass && typeof o.glass === "object") {
+          var g = {}
+          Glass.SETTINGS.forEach(function(s) { var v = Glass.clean(s.key, o.glass[s.key]); if (v !== undefined) g[s.key] = v })
+          root.glass = g
+        } else root.glass = null
       } catch (e) { root.overrides = ({}) }
     }
   }
