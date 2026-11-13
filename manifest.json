@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.bahman777.control-center",
   "name": "Control Center",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "author": "bahman777",
   "license": "MIT",
-  "description": "GNOME-style Quick Settings for Omarchy: a panel from the bar with toggles, sliders and in-place menus for Wi-Fi, network, Tailscale, Bluetooth, sound, displays, power, Hyprland layout, input, appearance, printers, scanners, screen recording, reminders and system, plus an optional notification center with actions and replies.",
+  "description": "GNOME- and macOS-style Quick Settings for Omarchy: live colour status icons in the bar, glassy tiles and sliders, Now Playing, today's next meeting, an optional notification center, and a full settings app inside the panel (Wi-Fi, Bluetooth, sound, displays, power, Tailscale, Hyprland layout, input, appearance, printers and more).",
   "kinds": [
     "bar-widget",
     "service"
@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "Quick Settings",
-    "description": "Status icons that open a GNOME-style Quick Settings panel.",
+    "description": "Live status icons that open the Quick Settings panel.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -1,170 +1,123 @@
-# Quick Settings for Omarchy
+# Control Center for Omarchy
 
-GNOME-style Quick Settings for [Omarchy](https://omarchy.org) Quattro, built as an Omarchy shell (Quickshell) plugin. Click the status icons in the bar and every common system setting is in one panel: what is on, what is available, and what you can change, updating live as things change.
+**Every setting you reach for, one click from the bar.**
+
+Control Center gives [Omarchy](https://omarchy.org) Quattro a polished, GNOME- and macOS-style **Quick Settings** panel: live status icons in the bar, glassy toggles and sliders, a Now Playing card, today's next meeting, a real notification center, and a complete settings app that opens *inside* the panel. It's built as a native Omarchy shell (Quickshell) plugin, so it follows your theme, updates the instant something changes, and drives Omarchy's own commands under the hood.
 
 ![Control Center](preview.png)
 
-## Quick Settings
+<p align="center"><img src="docs/demo.gif" alt="Menus and settings pages slide in and out of the panel" width="410"></p>
 
-Click the status icons in the bar (network · Bluetooth · volume · battery) and a GNOME-style **Quick Settings** panel drops down from the bar. It is the same kind of panel as Omarchy's own bar menus, so it closes when you click elsewhere and never hides other windows.
+## Highlights
 
-- **Header:** battery, plus screenshot, settings, lock and power buttons. Power opens Suspend, Restart, Power Off and Log Out.
-- **Sliders:** volume, microphone and brightness. The chevron next to a slider picks the output or input device, so a headset is one click away.
-- **Toggles:** Wi-Fi, Wired, Bluetooth, Tailscale, VPN, Power Mode, Night Light, Do Not Disturb, Stay Awake, Airplane Mode, Screen Record, Reminders, Passwordless Sudo, Window Layout, Printers and Scanners. Click a pill to switch it on or off. Click its chevron to open its menu in place: networks with inline password entry, Bluetooth devices with battery levels, Tailscale exit nodes, power modes, the Hyprland layout, printers (set the default, cancel jobs), scanners (scan with Document Scanner), screen recording (region or full screen, with desktop audio, microphone or webcam), reminders (presets or custom, cancel one or all) and passwordless sudo (turn it off in place; turning it on goes through Omarchy's confirmation and password prompt in a terminal).
-
-**Every setting stays in the panel.** The ⚙ button, the battery chip and each menu's "… Settings" link open a settings page *inside* the panel, with a back button. Those pages are Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Power, Windows & Layout, Keyboard & Mouse, Appearance, Notifications and System, and a search box finds the right one. Only things that are real apps (screenshot, printer setup, the document scanner, nmtui) open a window, and the panel closes first so nothing is ever hidden behind it.
-
-**Keyboard:** the arrow keys (or `h j k l`) move the highlight, `Tab` steps through everything in order, `Enter`/`Space` activates, `←`/`→` adjust a highlighted slider or choice, and `Esc` goes back a page, then collapses an open menu, then closes the panel. On the settings index, just start typing to search. Hovering or highlighting a control shows a tooltip.
-
-```bash
-omarchy-shell control-center toggle          # open/close Quick Settings
-omarchy-shell control-center menu wifi       # open with a menu expanded (wifi, bluetooth, tailscale, vpn,
-                                             # power, layout, printers, scanners, outputs, inputs, session)
-omarchy-shell control-center settings sound  # open the panel on a settings page (or 'index')
-```
-
-Right-clicking the bar icons opens the settings index. You may want to remove Omarchy's separate network, Bluetooth and audio icons from the bar (`omarchy bar` or Omarchy's bar settings), since the cluster replaces them.
-
-## Notification center
-
-Notifications → **Use Quick Settings for notifications** makes the plugin your notification daemon:
-
-- **Pop-ups:** at the top right, with the full multi-line text, the app's action buttons and an inline reply box when the app supports one. They pause while you hover.
-- **The panel:** the newest notifications sit under the toggles, with **Clear All**. The Notifications page lists every one, and you can act on, reply to or remove each.
-- **Do Not Disturb:** hides pop-ups. Notifications still collect, and critical ones still show.
-- **Omarchy's commands:** `omarchy-shell notifications …` works as before (dismiss, act, invoke action, toggle DND), so Omarchy's keybindings and `omarchy toggle notification silencing` keep working.
-
-Only one program can own notifications. Turning this on asks Dynamic Island to let go (its `notifications` setting goes to `false`) or takes over from Omarchy's own service (`omarchy.notifications` is disabled). Turning it off hands back exactly what it took. Notification text is always shown as plain text.
-
-## Keyboard
-
-- **Super + Ctrl + ,** opens or closes Quick Settings (Omarchy's "control notifications with the keyboard" binding).
-- **Super + Shift + Alt + ,** opens the notification list. Super + , acts on the newest pop-up, Super + Alt + ,
-  dismisses it, Super + Shift + , clears all, Super + Ctrl + Alt + , toggles Do Not Disturb.
-
-## Now Playing and Calendar
-
-- **Now Playing** (top of the panel, while a player is playing or paused): album cover, title and artist,
-  a progress bar you can click or drag to seek, previous / play-pause / next, and a switcher when several
-  MPRIS players are active. A music note appears in the bar while something plays.
-- **Today** (above the notifications): the next events still to come today, or tomorrow's once today is done,
-  in each calendar's colour; **Join** appears 15 minutes before a meeting with a Meet/Zoom/Teams link.
-- **Calendar page**: month grid with a dot per calendar, the chosen day's events, and your calendars
-  (rename, colour, hide, remove, add an iCal link). On first use it imports Dynamic Island's calendar links.
-- **Reminders**: a pop-up 10 minutes before each timed event, with Join when there's a meeting link.
-  Preview: `qs ipc --pid $(pgrep -n quickshell) call notifications calendarPreview`
-
-Links are kept in `~/.local/state/omarchy/control-center/calendars.json` (private, mode 600); feeds are cached
-in `~/.cache/omarchy-control-center/calendars` so events show offline. Needs `python-icalendar` and
-`python-recurring-ical-events`.
-
-## Night Light
-
-The Night Light tile turns it on or off now; its arrow opens a menu with the schedule
-(**Sunset to sunrise** at your location, **Custom hours** in 30-minute steps, or **No schedule**),
-**Warmth** (2500–6000 K) and **Brightness while on**. The schedule is written to
-`~/.config/hypr/hyprsunset.conf` only after you change something there; your original is kept as
-`hyprsunset.conf.before-control-center`. Sunset/sunrise come from `/tmp/latlon.txt` or `~/tmp/latlon.txt`
-and are refreshed once a day around midday.
-
-## Battery alerts
-
-Always on, whichever program shows your notifications:
-
-- **Laptop** (while unplugged): 20% (normal), 10% and 5% (critical, with time remaining).
-- **Every other device**: Bluetooth headsets and mice, phones, and Logitech receiver devices (through Solaar): 15% and 5% (critical).
-- Each level alerts once and re-arms after charging. Critical alerts stay up for 20 seconds and remain in the notification list.
-- Omarchy's own single 10% warning is dropped while the notification center is on, so you don't get both.
-- Preview: `qs ipc --pid $(pgrep -n quickshell) call notifications batteryPreview`
-
-## Settings pages
-
-| Page | What you can do |
-|---|---|
-| **Wi-Fi** | Turn Wi-Fi on/off, see visible networks with signal and security, connect (with password), disconnect and forget networks. Shows the current connection's IP, gateway, signal and band, lets you pin the band (2.4/5/6 GHz) and runs a speed test |
-| **Network** | Wired/LAN adapters (connect/disconnect, IPs, gateway, MAC), NetworkManager VPN and WireGuard profiles, other interfaces, DNS provider (Automatic/Cloudflare/Google/custom), hostname |
-| **Tailscale** | Connect/disconnect, this machine's IPs and MagicDNS name, exit node picker with LAN access, DNS/subnet routes/shields-up/SSH preferences, live list of machines (click to copy the IP, right-click to send files with Taildrop) |
-| **Bluetooth** | Power, discoverable, your devices with battery levels (connect, disconnect, forget), nearby devices to pair (scans while the page is open) |
-| **Sound** | Output volume and mute, output devices (headsets and Bluetooth speakers appear as they connect), microphone volume and mute (shows which apps are recording), input devices, and per-app volume |
-| **Displays** | Resolution, refresh rate and scale per monitor (follows hotplug, with a 15-second "Keep changes?" revert), brightness, mirroring, built-in display on/off, night light, text size |
-| **Power** | Battery level, time remaining, charge rate and health. Peripheral batteries, power mode, stay awake, screensaver and lock timers, plus lock/suspend/log out/restart/shut down |
-| **Windows & Layout** | Hyprland default layout (dwindle/master/scrolling) and layout-specific options, cycling the current workspace's layout, gaps, borders, rounding, animations, blur, shadows, dimming, opacity, focus-follows-mouse, and a live workspace overview |
-| **Keyboard & Mouse** | Keyboard layouts and input methods, key repeat, pointer speed, natural scrolling, touchpad on/off, tap-to-click and disable-while-typing |
-| **Appearance** | Omarchy theme (searchable), background, monospace font, bar position and background, window corners |
-| **Notifications** | Do Not Disturb, clear all, crash notifications, test notification |
-| **System** | Device, Omarchy/kernel/Hyprland versions, CPU, memory, graphics, disk, uptime. Update check and update, firmware, time zone, automatic time, Omarchy language |
-
-Search (`/` or `Ctrl+F`) filters pages by keyword, so "headset", "gaps" or "exit node" all work. `↑`/`↓` move between pages and `Esc` closes.
+- **A bar that tells you things.** Wi-Fi turns green with live signal bars, Bluetooth turns blue when something is connected, Tailscale shows its own nine-dot mark (dim when disconnected), the speaker has a tiny volume meter, and the battery shows its level, a charging bolt when plugged in, and turns orange at 20% and red at 10%. An orange camera or microphone appears while any app is using them, and hovering tells you which.
+- **Quick Settings that fit on screen.** Eight big tiles (Wi-Fi, Bluetooth, Sound, Tailscale, Power Mode, Displays, Night Light, Do Not Disturb), a row of small round toggles (Stay Awake, Airplane, Screen Record, Reminders, VPN, Passwordless Sudo, battery charge limit), and sliders for volume, microphone, screen brightness and keyboard backlight.
+- **Menus that slide in, not pile up.** A tile's arrow swaps the panel for its menu, like macOS Control Center: networks with inline passwords, Bluetooth devices with battery levels, Tailscale exit nodes, sound devices and per-app volume, Night Light schedule and warmth, and more. Back (or `Esc`) slides you out again.
+- **Now Playing.** Album art, title, a seekable progress bar and transport controls for any MPRIS player, with a switcher when several are running. *Previous* restarts the song the way you expect, and the card lingers for 30 seconds after you pause so you can pick up where you left off.
+- **Today at a glance.** Your next event from any iCal calendar, with a **Join** button 15 minutes before a Meet, Zoom or Teams call, plus a month-view Calendar page and meeting reminders.
+- **A real notification center** (optional): pop-ups with action buttons and inline replies, Do Not Disturb that also lights Omarchy's bar indicator, and a history that survives shell restarts.
+- **A full settings app in the panel:** Wi-Fi, Network, Tailscale, Bluetooth, Sound, Displays, Printers & Scanners, Network Devices, Power, Windows & Layout, Keyboard & Mouse, Appearance, Calendar, Notifications and System, with search.
+- **Glass and motion.** Soft highlights, raised knobs, glossy check badges and short slide transitions, in your theme's colours.
+- **Keyboard-first.** Arrows or `h j k l` move, `Tab` walks everything, `Enter` activates, `←`/`→` adjust sliders, `Esc` steps back.
 
 ## Install
 
 ```bash
 omarchy plugin add https://github.com/bahman777/omarchy-control-center --enable
-omarchy restart shell   # after updates, so the new QML is loaded
+omarchy restart shell
 ```
 
-This adds the status-icon cluster to the right of the bar.
-
-To open it from a key binding or a script:
-
-```bash
-omarchy-shell shell toggle io.github.bahman777.control-center
-omarchy-shell shell summon io.github.bahman777.control-center '{"page":"bluetooth"}'
-```
-
-Page ids: `wifi`, `network`, `tailscale`, `bluetooth`, `sound`, `displays`, `power`, `windows`, `input`, `appearance`, `notifications`, `system`.
-
-For example, in `~/.config/hypr/bindings.lua`:
-
-```lua
-o.bind("SUPER CTRL, S", "Control Center", "exec", "omarchy-shell shell toggle io.github.bahman777.control-center")
-```
+The status icons appear on the right of the bar. Click them for Quick Settings; right-click for the settings index. Since the cluster covers network, Bluetooth, audio and battery, you may want to remove Omarchy's own indicators from the bar (`omarchy bar`).
 
 ## Remove
 
 ```bash
 omarchy plugin remove io.github.bahman777.control-center
+omarchy restart shell
 ```
 
-If you kept Hyprland changes after restart (see below), also delete the `pcall(dofile, … control-center.lua)` line at the end of `~/.config/hypr/hyprland.lua` and the file `~/.config/hypr/control-center.lua`. A backup of `hyprland.lua` from before the line was added is at `~/.config/hypr/hyprland.lua.bak.control-center`.
+Then, only if you used these opt-in features:
 
-## How settings are applied
+- **Notification center:** turn it off first (Notifications page) and the plugin hands notifications back to Omarchy. If you removed the plugin while it was on, re-enable Omarchy's service with `omarchy plugin enable omarchy.notifications`.
+- **"Keep after restart" for window settings:** delete the `pcall(dofile, … control-center.lua)` line at the end of `~/.config/hypr/hyprland.lua` and the file `~/.config/hypr/control-center.lua`. A backup from before the line was added is at `~/.config/hypr/hyprland.lua.bak.control-center`.
+- **Night Light schedule:** your original `~/.config/hypr/hyprsunset.conf` is kept as `hyprsunset.conf.before-control-center`; copy it back.
+- Optional cleanup: `~/.local/state/omarchy/control-center/` (settings, notification history, calendar links) and `~/.cache/omarchy-control-center/`.
 
-Wherever Omarchy has a command, the Control Center uses it (`omarchy-bluetooth-power`, `omarchy-powerprofiles-set`, `omarchy-dns`, `omarchy-theme-set`, `omarchy-audio-output-set-default`, and so on), so it behaves exactly like Omarchy's own menus and panels.
+## Using it
 
-**Hyprland options** (Windows & Layout, Keyboard & Mouse, display modes) apply immediately with `hyprctl eval`. Only a fixed allowlist of options is ever written, and values are type-checked and clamped. Your changes are saved to `~/.config/hypr/control-center.lua`, a file the plugin owns. **The plugin never edits your own config without asking.** Until you press **Keep after restart**, changes last only until you log out. Pressing it adds one line at the end of `hyprland.lua` (after making a backup) that loads `control-center.lua` after your own files, so your choices there take precedence. **Reset window settings** clears all of this and reloads Hyprland.
+| | |
+|---|---|
+| **Super + Ctrl + ,** | Open or close Quick Settings |
+| **Super + Shift + Alt + ,** | Open the notification list |
+| **Super + ,** / **Super + Alt + ,** | Act on / dismiss the newest pop-up |
+| **Super + Shift + ,** | Clear all notifications |
+| **Super + Ctrl + Alt + ,** | Toggle Do Not Disturb |
 
-**Idle timers** are written to `~/.config/omarchy/shell.json` (the `idle` section only), which the shell hot-reloads.
+These are Omarchy's own notification bindings; the plugin answers them, so nothing in your keybindings changes. From scripts:
 
-The plugin makes no network requests of its own. Wi-Fi, Bluetooth, sound, battery and monitor state come from Quickshell's NetworkManager, BlueZ, PipeWire, UPower and Hyprland bindings, so the panel updates as soon as something changes. Tailscale and a few other details are polled only while their page is open.
+```bash
+omarchy-shell control-center toggle            # open / close
+omarchy-shell control-center menu sound        # open on a menu: wifi, bluetooth, tailscale, vpn, power,
+                                               # sound, display, night, record, reminders, sudo,
+                                               # outputs, inputs, session
+omarchy-shell control-center settings displays # open on a settings page (or 'index')
+```
+
+### A few details worth knowing
+
+- **Sound output switching** moves everything that's playing to the new device, including players that don't announce an app name (Mopidy, for one). When another device is still playing besides the one you selected, for example your laptop speakers as part of a Snapcast group, an extra "Also playing on…" slider appears for it.
+- **Battery charge limit** (laptops that support it): the chip shows your limit, such as "Limit 80%". Click it to charge to 100% before a trip, then click again to go back. It uses `asusctl` on ASUS laptops (no password), otherwise the standard `charge_control_end_threshold` setting through a password prompt.
+- **Keyboard backlight** works with any `*kbd_backlight*` device, through `brightnessctl`.
+- **Night Light**: on/off, a schedule (sunset to sunrise, custom hours, or none), warmth and brightness. Sunset times come from a `lat lon` file at `~/tmp/latlon.txt` or `/tmp/latlon.txt` if you have one, otherwise from your time zone.
+- **Battery alerts** for the laptop (20%, 10%, 5%) and every other device: Bluetooth headsets and mice, phones, and Logitech devices through Solaar (15%, 5%).
+- **Calendars** are iCal links (for Google: Calendar settings → your calendar → Integrate calendar → "Secret address in iCal format"), stored privately (mode 600) and cached so events show offline.
+
+## What it changes on your system
+
+The plugin is careful about your configuration:
+
+- **It never edits your own config without asking.** Window and input changes apply live with `hyprctl` and are saved to a file the plugin owns (`~/.config/hypr/control-center.lua`); they only load at login after you press **Keep after restart**, which adds one line to `hyprland.lua` after making a backup. Only an allowlist of Hyprland options is ever written, type-checked and clamped.
+- **Notifications are opt-in.** Turning the notification center on disables Omarchy's notification service; turning it off restores it.
+- **Night Light** writes `~/.config/hypr/hyprsunset.conf` only when you change its schedule, keeping your original.
+- **Idle timers** go to the `idle` section of `~/.config/omarchy/shell.json`.
+- Wherever Omarchy has a command (`omarchy-bluetooth-power`, `omarchy-powerprofiles-set`, `omarchy-dns`, `omarchy-theme-set`, …) the plugin uses it, so it behaves exactly like Omarchy's own menus.
+- Actions that need administrator rights (DNS, time zone, adding printers, the generic charge limit) go through Omarchy's polkit password prompt. **Passwordless Sudo** uses Omarchy's own `omarchy-sudo-passwordless`, with its confirmation, and can be turned off from the panel.
+- The plugin makes **no network requests of its own** apart from fetching the iCal calendar links you add; the Wi-Fi speed test runs Omarchy's own `omarchy-network-speedtest`, and only when you start it. Commands run with argument lists, never shell strings built from data.
 
 ## Requirements
 
 - Omarchy Quattro (4.x) with the Omarchy shell
-- NetworkManager (`nmcli`), `iproute2`, `brightnessctl`, `power-profiles-daemon`, `wl-clipboard`, `python3`. All ship with Omarchy
-- Optional: Solaar (`solaar`) to show Logitech Unifying/Bolt mouse and keyboard batteries
-- Optional: CUPS (`lpstat`, `system-config-printer`) for Printers, SANE (`scanimage`) and `simple-scan` for Scanners
-- Optional: `tailscale` for the Tailscale page (it offers to install Tailscale if missing)
+- Ships with Omarchy: NetworkManager, PipeWire (`pactl`, `wpctl`), BlueZ, UPower, `brightnessctl`, `power-profiles-daemon`, `wl-clipboard`, `python3`
+- Optional:
+  - `tailscale` for the Tailscale tile and page
+  - `python-icalendar` and `python-recurring-ical-events` for calendars
+  - `solaar` for Logitech Unifying/Bolt battery levels
+  - CUPS (`lpstat`, `system-config-printer`), SANE (`scanimage`) and `simple-scan` for printers and scanners
+  - `asusctl` for the password-free charge limit on ASUS laptops
 
-Some actions ask for your password through Omarchy's polkit prompt, such as changing DNS or the time zone, and Tailscale changes if your user isn't the Tailscale operator (`sudo tailscale set --operator=$USER` fixes that).
+Anything that isn't installed or isn't present on your hardware simply doesn't appear: no keyboard backlight means no slider, no VPN means no VPN toggle, and so on.
+
+<p align="center"><img src="docs/bar.png" alt="Status icons in the bar" width="420"><br><img src="docs/settings.png" alt="Settings index inside the panel" width="486"></p>
 
 ## Development
 
-The plugin lives in `~/.config/omarchy/plugins/io.github.bahman777.control-center/`. The shell caches compiled QML, so after changing files (or updating the plugin) run `omarchy restart shell`. `omarchy plugin validate .` checks the manifest.
+The shell caches compiled QML, so run `omarchy restart shell` after changing files. `omarchy plugin validate .` checks the manifest.
 
 ```
-manifest.json      plugin manifest (bar-widget + overlay)
-BarWidget.qml      status icons in the bar + Quick Settings panel
-quick/             Quick Settings pills, menus, sliders
-Pages.js           the settings pages shown in the panel
-Runner.qml         argv-only process runner (no shell strings built from data)
-HyprOptions.qml    live Hyprland options + persistence
-HyprSpec.js        option allowlist, validation, Lua serialization
+manifest.json      plugin manifest (bar widget + notification service)
+BarWidget.qml      bar status icons and the Quick Settings panel
+NotifyService.qml  notification daemon, battery alerts, calendar reminders
+quick/             Quick Settings: tiles, chips, sliders, menus, Now Playing, glass
+pages/             one file per settings page
+ui/                shared rows, groups and controls for the pages
+tools/             helpers (audio output switch, privacy check, Night Light, calendar)
+Pages.js           the settings page list
+Runner.qml         argv-only process runner
+HyprOptions.qml    live Hyprland options and persistence
+HyprSpec.js        option allowlist, validation, Lua serialisation
 Icons.js           Nerd Font glyphs
-ui/                shared rows, groups, switches, sliders
-pages/             one file per page
 ```
 
 ## License
 
-MIT
+[MIT](LICENSE)
