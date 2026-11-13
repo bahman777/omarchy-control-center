@@ -106,6 +106,56 @@ Panel {
     return null
   }
   // Audio output switch used by the Sound menu and page (see tools/audio-output.sh).
+  // ------------------------------------------------------------ airplane mode
+  // Like Apple's: Wi-Fi goes off; Bluetooth stays on while a device (a
+  // headset, say) is connected. Turning Wi-Fi or Bluetooth back on while in
+  // Airplane mode is remembered for next time. Turning it off restores what
+  // was on before. Kept here (always alive) and in a state file.
+  property var airplane: ({ on: false, keepBt: false, keepWifi: false, wifiBefore: true, btBefore: true })
+  FileView {
+    id: airFile
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/control-center/airplane.json"
+    printErrors: false
+    onLoaded: {
+      try {
+        var a = JSON.parse(text()), out = {}
+        for (var k in root.airplane) out[k] = root.airplane[k]
+        for (var j in a) if (j in out) out[j] = a[j]
+        root.airplane = out
+      } catch (e) {}
+    }
+  }
+  function saveAirplane(a) { airplane = a; airFile.setText(JSON.stringify(a) + "\n") }
+  // Our own switching shouldn't count as the user's choice.
+  Timer { id: airSettle; interval: 4000 }
+  function setAirplane(on) {
+    var a = {}
+    for (var k in airplane) a[k] = airplane[k]
+    airSettle.restart()
+    if (on) {
+      a.wifiBefore = Networking.wifiEnabled
+      a.btBefore = btOn
+      a.on = true
+      saveAirplane(a)
+      if (!a.keepWifi && Networking.wifiEnabled) Networking.wifiEnabled = false
+      if (btOn && !a.keepBt && !btConnected) runner.run(["omarchy-bluetooth-power", "off"], null)
+    } else {
+      a.on = false
+      saveAirplane(a)
+      if (a.wifiBefore && !Networking.wifiEnabled) Networking.wifiEnabled = true
+      if (a.btBefore && !btOn) runner.run(["omarchy-bluetooth-power", "on"], null)
+    }
+  }
+  onBtOnChanged: if (airplane.on && !airSettle.running) { var a = {}; for (var k in airplane) a[k] = airplane[k]; a.keepBt = btOn; saveAirplane(a) }
+  Connections {
+    target: Networking
+    function onWifiEnabledChanged() {
+      if (!root.airplane.on || airSettle.running) return
+      var a = {}; for (var k in root.airplane) a[k] = root.airplane[k]
+      a.keepWifi = Networking.wifiEnabled; root.saveAirplane(a)
+    }
+  }
+
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
   function setAudioOutput(id, name) { runner.run(["bash", pluginDir + "/tools/audio-output.sh", String(id), String(name)], null) }
 
@@ -172,6 +222,7 @@ Panel {
     var l = []
     if (camApps !== "") l.push("Camera in use: " + camApps.split(",").join(", "))
     if (micApps !== "") l.push("Microphone in use: " + micApps.split(",").join(", "))
+    if (airplane.on) l.push("Airplane mode" + (btOn ? " · Bluetooth on" : "") + (Networking.wifiEnabled ? " · Wi-Fi on" : ""))
     if (playing) l.push("Playing: " + [playing.trackTitle, playing.trackArtist].filter(function(x) { return x }).join(" — "))
     if (notifActive) l.push("Notifications: " + (notifService.dnd ? "Do Not Disturb" : notifService.count > 0 ? notifService.count + " unread" : "none"))
     l.push(wiredUp ? "Ethernet: connected" : !Networking.wifiEnabled ? "Wi-Fi: off" : wifiNet ? "Wi-Fi: " + (wifiNet.name || "connected") : "Wi-Fi: not connected")
@@ -346,6 +397,7 @@ Panel {
       BarGlyph { glyph: root.micApps !== "" ? Icons.microphone : ""; color: root.cOrange }
       BarGlyph { glyph: root.playing ? Icons.music : ""; color: root.barFg }
       BarGlyph { glyph: root.notifGlyph; color: root.notifActive && !root.notifService.dnd && root.notifService.count > 0 ? root.accent : root.barFg }
+      BarGlyph { glyph: root.airplane.on ? String.fromCodePoint(0xF001D) : ""; color: root.cOrange }
       BarGlyph { glyph: root.netGlyph; color: root.netColor }
       // Tailscale's mark: nine dots, the solid ones forming a T.
       Item {

@@ -625,7 +625,7 @@ Item {
                 active: false, hasMenu: true, menuOnly: true })
     return list
   }
-  readonly property bool airplane: !Networking.wifiEnabled && !btOn
+  readonly property bool airplane: !!qc.airplane && qc.airplane.on
 
   function pillTip(p) {
     if (!p || !p.id) return ""
@@ -639,7 +639,8 @@ Item {
     case "printers": return "Printers and print jobs"
     case "scanners": return "Find scanners and scan a document"
     case "awake": return p.active ? "Allow the screen to lock and sleep again" : "Keep the screen on: no dimming, lock or screensaver"
-    case "airplane": return p.active ? "Turn Wi-Fi and Bluetooth back on" : "Turn off Wi-Fi and Bluetooth"
+    case "airplane": return p.active ? "Turn Airplane mode off: Wi-Fi and Bluetooth go back to how they were"
+      : "Turn off Wi-Fi" + (btOn && (btConnected.length || qc.airplane.keepBt) ? " (Bluetooth stays on for your devices)" : " and Bluetooth")
     case "charge": return p.active ? "Charging to 100% — click to limit charging to " + savedChargeLimit + "% again"
       : "Charging stops at " + chargeLimit + "% to protect the battery — click to charge to 100%"
     case "firewall": return (p.active ? "Turn the firewall off" : "Turn the firewall on") + " (right-click: ports and rules)"
@@ -706,8 +707,7 @@ Item {
       qc.runner.run(["omarchy-toggle-idle", stayAwake ? "stay-awake" : "allow-idle"], function() { q.refreshSlow() })
       break
     case "airplane":
-      if (airplane) { Networking.wifiEnabled = true; qc.runner.run(["omarchy-bluetooth-power", "on"], null) }
-      else { Networking.wifiEnabled = false; qc.runner.run(["omarchy-bluetooth-power", "off"], null) }
+      qc.setAirplane(!airplane)
       break
     case "record": if (recording) stopRecording(); else startRecording(false); break
     case "sudo": if (sudoFree) disableSudo(); else toggleMenu("sudo"); break
