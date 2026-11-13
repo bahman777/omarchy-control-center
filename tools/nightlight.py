@@ -83,13 +83,43 @@ def save(s):
 
 
 def latlon():
+    """Location for sunset/sunrise: a "lat lon" file if one exists, else the
+    coordinates of the time zone's main city (zone1970.tab), close enough
+    for a sunset schedule."""
     for p in LATLON:
         try:
             a, b = open(p).read().split()[:2]
             return float(a), float(b)
         except (OSError, ValueError):
             continue
+    return tz_latlon()
+
+
+def tz_latlon():
+    try:
+        zone = os.path.realpath("/etc/localtime").split("/zoneinfo/", 1)[1]
+    except (IndexError, OSError):
+        return None
+    for tab in ("/usr/share/zoneinfo/zone1970.tab", "/usr/share/zoneinfo/zone.tab"):
+        try:
+            for line in open(tab):
+                f = line.split("\t")
+                if len(f) >= 3 and not line.startswith("#") and f[2].strip() == zone:
+                    return iso6709(f[1])
+        except OSError:
+            continue
     return None
+
+
+def iso6709(c):
+    """'+3403-11815' or '+340308-1181434' -> (34.05, -118.25)."""
+    import re
+    m = re.match(r"([+-])(\d{2})(\d{2})(\d{2})?([+-])(\d{3})(\d{2})(\d{2})?$", c.strip())
+    if not m:
+        return None
+    lat = int(m.group(2)) + int(m.group(3)) / 60 + int(m.group(4) or 0) / 3600
+    lon = int(m.group(6)) + int(m.group(7)) / 60 + int(m.group(8) or 0) / 3600
+    return (-lat if m.group(1) == "-" else lat, -lon if m.group(5) == "-" else lon)
 
 
 def sun_times(lat, lon, day):
