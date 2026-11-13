@@ -17,6 +17,8 @@ Rectangle {
   color: active ? Color.accent : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, mouse.containsMouse || hasCursor ? 0.16 : 0.08)
   border.width: hasCursor ? 2 : 0
   border.color: Color.accent
+  GlassShadow { visible: b.color.a > 0.01; depth: 1 }
+  Glass { visible: b.color.a > 0.01; strong: b.active }
   Text {
     anchors.centerIn: parent
     textFormat: Text.PlainText

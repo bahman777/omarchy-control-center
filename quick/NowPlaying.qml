@@ -90,6 +90,9 @@ Rectangle {
   border.width: 1
   border.color: Qt.rgba(fg.r, fg.g, fg.b, 0.10)
 
+  GlassShadow {}
+  Glass {}
+
   // MPRIS doesn't push the position; ask for it while playing.
   Timer {
     interval: 1000; repeat: true

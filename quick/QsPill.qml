@@ -39,6 +39,9 @@ Rectangle {
   readonly property bool splitMenu: hasMenu && !menuOnly
   readonly property real chevWidth: splitMenu ? Style.space(40) : 0
 
+  GlassShadow {}
+  Glass { strong: pill.active }
+
   Item {
     id: body
     anchors { left: parent.left; top: parent.top; bottom: parent.bottom; right: parent.right; rightMargin: pill.chevWidth }

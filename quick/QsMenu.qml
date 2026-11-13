@@ -21,6 +21,8 @@ Rectangle {
   Behavior on opacity { NumberAnimation { duration: Style.duration(160); easing.type: Easing.OutCubic } }
   Behavior on scale { NumberAnimation { duration: Style.duration(160); easing.type: Easing.OutCubic } }
 
+  Glass {}
+
   Column {
     id: col
     x: Style.space(10)

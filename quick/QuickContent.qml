@@ -28,7 +28,30 @@ Item {
 
   implicitHeight: page === "" ? col.implicitHeight : pageView.implicitHeight
   property string expanded: ""
+  // ------------------------------------------------------------ transitions
+  // Going deeper (a menu, a page) slides the new view in from the right;
+  // going back slides it in from the left. Short and small: just enough to
+  // follow where you went.
+  property int navDir: 1
+  function slideIn(view) {
+    if (!view || !view.visible || !q.qc.opened) return
+    navAnim.stop()
+    navAnim.target = view
+    navAnim.dx = q.navDir * Style.space(36)
+    navAnim.start()
+  }
+  ParallelAnimation {
+    id: navAnim
+    property Item target: null
+    property real dx: 0
+    NumberAnimation { target: navAnim.target; property: "x"; from: navAnim.dx; to: 0; duration: Style.duration(200); easing.type: Easing.OutCubic }
+    NumberAnimation { target: navAnim.target; property: "opacity"; from: 0.25; to: 1; duration: Style.duration(170); easing.type: Easing.OutCubic }
+    onStopped: if (target) { target.x = 0; target.opacity = 1 }
+  }
+  function currentView() { return page !== "" ? pageView : expanded !== "" ? menuView : col }
+
   function toggleMenu(id) {
+    navDir = expanded === id ? -1 : 1
     expanded = expanded === id ? "" : id
     if (flick) flick.contentY = 0
     resetCursor()
@@ -41,16 +64,18 @@ Item {
   readonly property string page: pageStack.length ? pageStack[pageStack.length - 1] : ""
   readonly property var pageInfo: page === "index" ? { title: "Settings", icon: Icons.cog } : (Pages.find(page) || { title: "", icon: "" })
   function openPage(id) {
+    navDir = 1
     var target = id && (id === "index" || Pages.find(id)) ? id : "index"
     pageStack = pageStack.concat([target])
     expanded = ""
     resetCursor()
   }
   function back() {
+    navDir = -1
     pageStack = pageStack.slice(0, -1)
     resetCursor()
   }
-  onPageChanged: { qc.pageMode = page !== ""; if (flick) flick.contentY = 0 }
+  onPageChanged: { qc.pageMode = page !== ""; if (flick) flick.contentY = 0; Qt.callLater(function() { q.slideIn(q.currentView()) }) }
 
   // IPC / right-click requests: "wifi" expands a menu, "page:sound" opens a page.
   function applyRequest(req) {
@@ -76,6 +101,7 @@ Item {
 
   // Esc: leave the page, then collapse the menu, then close the panel.
   function stepBack() {
+    navDir = -1
     if (page !== "") back()
     else if (expanded !== "") { expanded = ""; resetCursor() }
     else qc.close()
@@ -532,7 +558,10 @@ Item {
       q.scannedOnce = true
     })
   }
-  onExpandedChanged: if (expanded === "scanners" && !scannedOnce) scanForScanners()
+  onExpandedChanged: {
+    if (expanded === "scanners" && !scannedOnce) scanForScanners()
+    Qt.callLater(function() { q.slideIn(q.currentView()) })
+  }
   Timer { interval: 4000; running: true; repeat: true; triggeredOnStart: true; onTriggered: q.refreshSlow() }
 
   // ================================================================ pills
@@ -756,6 +785,8 @@ Item {
         width: batRow.implicitWidth + Style.space(28)
         radius: Style.cornerRadius > 0 ? height / 2 : 0
         color: Qt.rgba(q.fg.r, q.fg.g, q.fg.b, batMouse.containsMouse ? 0.16 : 0.08)
+        GlassShadow { depth: 1 }
+        Glass {}
         Row {
           id: batRow
           anchors.centerIn: parent
@@ -1116,7 +1147,7 @@ Item {
     QsRoundButton {
       icon: "\uf053"
       tip: "Back (Esc)"
-      onClicked: { q.expanded = ""; q.resetCursor() }
+      onClicked: { q.navDir = -1; q.expanded = ""; q.resetCursor() }
     }
     Loader {
       width: parent.width

@@ -34,6 +34,8 @@ Item {
     border.width: chip.hasCursor || chip.expanded ? 2 : 0
     border.color: chip.active ? chip.fg : Color.accent
     Behavior on color { ColorAnimation { duration: Style.duration(120) } }
+    GlassShadow {}
+    Glass { strong: chip.active }
     Text {
       anchors.centerIn: parent
       textFormat: Text.PlainText

@@ -85,10 +85,30 @@ Rectangle {
       anchors.rightMargin: Style.space(10)
       anchors.verticalCenter: parent.verticalCenter
       textFormat: Text.PlainText
-      text: item.checked ? "" : item.trailing
-      color: item.checked ? Color.accent : Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.6)
+      visible: !item.checked
+      text: item.trailing
+      color: Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.6)
       font.family: Style.font.family
-      font.pixelSize: item.checked ? Style.font.body : Style.font.caption
+      font.pixelSize: Style.font.caption
+    }
+    // Selected: a small glossy accent badge with a tick.
+    Rectangle {
+      visible: item.checked
+      anchors.right: parent.right
+      anchors.rightMargin: Style.space(8)
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(20); height: width; radius: width / 2
+      color: Color.accent
+      GlassShadow { depth: 1 }
+      Glass { strong: true }
+      Text {
+        anchors.centerIn: parent
+        textFormat: Text.PlainText
+        text: "\uf00c"
+        color: Qt.rgba(Color.menu.background.r, Color.menu.background.g, Color.menu.background.b, 1)
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+      }
     }
     MouseArea {
       id: mouse
