@@ -59,12 +59,15 @@ Panel {
     : vol < 0.34 ? String.fromCodePoint(0xF057F) : vol < 0.67 ? String.fromCodePoint(0xF0580) : Icons.volume
   readonly property var batt: UPower.displayDevice
   readonly property bool hasBattery: !!batt && batt.isPresent
+  // Plugged in, whether or not it's charging (a charge limit holds it at 80%).
+  readonly property bool plugged: hasBattery && !UPower.onBattery
+  readonly property real battPct: hasBattery ? Math.max(0, Math.min(1, batt.percentage)) : 0
   readonly property string batteryGlyph: {
     if (!hasBattery) return ""
-    var p = batt.percentage
-    if (batt.state === UPowerDeviceState.Charging) return Icons.batteryCharging
-    if (p >= 0.95) return Icons.battery
-    return String.fromCodePoint(0xF007A + Math.max(0, Math.min(8, Math.floor(p * 10) - 1)))
+    var step = Math.max(0, Math.min(10, Math.round(battPct * 10)))
+    var charging = [0xF089C, 0xF089C, 0xF0086, 0xF0087, 0xF0088, 0xF089D, 0xF0089, 0xF089E, 0xF008A, 0xF008B, 0xF0085]
+    var discharging = [0xF008E, 0xF007A, 0xF007B, 0xF007C, 0xF007D, 0xF007E, 0xF007F, 0xF0080, 0xF0081, 0xF0082, 0xF0079]
+    return String.fromCodePoint((plugged ? charging : discharging)[step])
   }
   // The plugin's notification service (NotifyService.qml), once the shell has
   // created it. Looked up on a timer: the shell's service map isn't a binding.
@@ -81,13 +84,15 @@ Panel {
     : notifService.dnd ? Icons.bellOff : notifService.count > 0 ? String.fromCodePoint(0xF116B) : Icons.bell
 
   // Tailscale: shown only while connected, like Bluetooth only while on.
-  property bool tsUp: false
+  // "" when tailscale isn't installed or answering; otherwise its BackendState.
+  property string tsState: ""
+  readonly property bool tsUp: tsState === "Running"
   Timer {
     interval: 10000; running: true; repeat: true; triggeredOnStart: true
     onTriggered: root.runner.run(["tailscale", "status", "--json", "--peers=false"], function(code, out) {
-      var up = false
-      try { up = code === 0 && JSON.parse(out).BackendState === "Running" } catch (e) {}
-      root.tsUp = up
+      var st = ""
+      try { st = String(JSON.parse(out).BackendState || "") } catch (e) {}
+      root.tsState = st
     })
   }
 
@@ -113,18 +118,46 @@ Panel {
   }
   Timer { id: musicLingerTimer; interval: 30000; onTriggered: root.musicLinger = false }
   readonly property bool showNowPlaying: !!playing || musicLinger
-  readonly property string glyphs: [playing ? Icons.music : "", notifGlyph, netGlyph, tsUp ? Icons.vpn : "",
-    btOn ? (btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : "", volGlyph, batteryGlyph]
-    .filter(function(g) { return g !== "" }).join("  ")
+
+  // ------------------------------------------------------------ status colours
+  // Taken from the theme's colors.toml (red/orange/green/blue), so they
+  // follow theme changes; fallbacks for themes that leave them out.
+  property var themeColors: ({})
+  FileView {
+    id: themeColorsFile
+    path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/colors.toml"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: {
+      var out = {}, lines = text().split("\n")
+      for (var i = 0; i < lines.length; i++) {
+        var m = lines[i].match(/^\s*([a-z_]+)\s*=\s*"(#[0-9a-fA-F]{6,8})"/)
+        if (m) out[m[1]] = m[2]
+      }
+      root.themeColors = out
+    }
+  }
+  Connections { target: Color; function onForegroundChanged() { themeColorsFile.reload() } }
+  readonly property color barFg: bar && bar.barForeground ? bar.barForeground : Color.bar.text
+  readonly property color dimFg: Qt.rgba(barFg.r, barFg.g, barFg.b, 0.4)
+  readonly property color cRed: themeColors.red || "#e5484d"
+  readonly property color cOrange: themeColors.orange || "#f5a524"
+  readonly property color cGreen: themeColors.green || "#46c35a"
+  readonly property color cBlue: themeColors.blue || "#3b8eea"
+
+  readonly property color netColor: wiredUp || wifiNet ? cGreen : dimFg
+  readonly property color btColor: btConnected ? cBlue : barFg
+  readonly property color volColor: muted ? dimFg : barFg
+  readonly property color battColor: plugged ? cGreen : battPct <= 0.10 ? cRed : battPct <= 0.20 ? cOrange : barFg
   readonly property string statusTip: {
     var l = []
     if (playing) l.push("Playing: " + [playing.trackTitle, playing.trackArtist].filter(function(x) { return x }).join(" — "))
     if (notifActive) l.push("Notifications: " + (notifService.dnd ? "Do Not Disturb" : notifService.count > 0 ? notifService.count + " unread" : "none"))
     l.push(wiredUp ? "Ethernet: connected" : !Networking.wifiEnabled ? "Wi-Fi: off" : wifiNet ? "Wi-Fi: " + (wifiNet.name || "connected") : "Wi-Fi: not connected")
-    l.push("Tailscale: " + (tsUp ? "connected" : "off"))
+    if (tsState !== "") l.push("Tailscale: " + (tsUp ? "connected" : "not connected"))
     l.push("Bluetooth: " + (!btOn ? "off" : btConnected ? "device connected" : "on"))
     l.push("Volume: " + (muted ? "muted" : Math.round(vol * 100) + "%"))
-    if (hasBattery) l.push("Battery: " + Math.round(batt.percentage * 100) + "%")
+    if (hasBattery) l.push("Battery: " + Math.round(battPct * 100) + "%" + (!plugged ? "" : batt.state === UPowerDeviceState.Charging ? ", charging" : ", plugged in"))
     l.push("Click: Quick Settings · Right-click: all settings")
     return l.join("\n")
   }
@@ -263,7 +296,10 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.glyphs
+    text: ""
+    hasVisualContent: true
+    fixedWidth: button.vertical ? -1 : statusIcons.implicitWidth + Style.spaceReal(8.5) * 2
+    fixedHeight: button.vertical ? statusIcons.implicitHeight + Style.spaceReal(6) * 2 : -1
     fontSize: Style.bar.iconFont
     active: root.opened
     useActiveColor: false
@@ -272,6 +308,88 @@ Panel {
       if (b === Qt.RightButton) root.openSettings("index")
       else root.toggle()
     }
+
+    // Left to right: music, notifications, network, Tailscale, Bluetooth,
+    // sound, battery. Music only while playing; Bluetooth only while on;
+    // Tailscale only when installed.
+    Grid {
+      id: statusIcons
+      anchors.centerIn: parent
+      columns: button.vertical ? 1 : 99
+      spacing: Style.space(6)
+      verticalItemAlignment: Grid.AlignVCenter
+      horizontalItemAlignment: Grid.AlignHCenter
+      scale: button.pressScale
+
+      BarGlyph { glyph: root.playing ? Icons.music : ""; color: root.barFg }
+      BarGlyph { glyph: root.notifGlyph; color: root.notifActive && !root.notifService.dnd && root.notifService.count > 0 ? root.accent : root.barFg }
+      BarGlyph { glyph: root.netGlyph; color: root.netColor }
+      // Tailscale's mark: nine dots, the solid ones forming a T.
+      Item {
+        visible: root.tsState !== ""
+        width: Style.bar.iconCanvas; height: Style.bar.iconCanvas
+        Grid {
+          anchors.centerIn: parent
+          columns: 3
+          spacing: Math.max(1, Math.round(Style.bar.iconSize / 9))
+          Repeater {
+            model: [0, 0, 0, 1, 1, 1, 0, 1, 0]
+            Rectangle {
+              required property int modelData
+              readonly property real d: Math.round((Style.bar.iconSize - 2 * Math.max(1, Math.round(Style.bar.iconSize / 9))) / 3)
+              width: d; height: d; radius: d / 2
+              color: root.tsUp ? root.barFg : root.dimFg
+              opacity: modelData ? 1 : 0.35
+            }
+          }
+        }
+      }
+      BarGlyph { glyph: root.btOn ? (root.btConnected ? Icons.bluetoothConnected : Icons.bluetooth) : ""; color: root.btColor }
+      // Speaker plus a small level meter.
+      Row {
+        spacing: Math.max(1, Math.round(Style.bar.iconSize / 8))
+        BarGlyph { glyph: root.volGlyph; color: root.volColor }
+        Rectangle {
+          visible: !root.muted
+          anchors.verticalCenter: parent.verticalCenter
+          width: Math.max(2, Math.round(Style.bar.iconSize / 5)); height: Style.bar.iconSize
+          radius: width / 2
+          color: Qt.rgba(root.barFg.r, root.barFg.g, root.barFg.b, 0.25)
+          Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width; radius: parent.radius
+            height: Math.max(width, parent.height * Math.min(1, root.vol))
+            color: root.vol > 1.001 ? root.cOrange : root.barFg
+          }
+        }
+      }
+      Row {
+        visible: root.hasBattery
+        spacing: Math.max(1, Math.round(Style.bar.iconSize / 6))
+        BarGlyph { glyph: root.batteryGlyph; color: root.battColor }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          visible: !button.vertical
+          text: Math.round(root.battPct * 100) + "%"
+          color: root.battColor
+          font.family: button.fontFamily
+          font.pixelSize: Math.round(Style.bar.iconFont * 0.85)
+          renderType: Text.NativeRendering
+        }
+      }
+    }
+  }
+
+  component BarGlyph: OpticalGlyph {
+    property string glyph: ""
+    visible: glyph !== ""
+    width: Style.bar.iconCanvas
+    height: Style.bar.iconCanvas
+    text: glyph
+    fontFamily: button.fontFamily
+    fontSize: Style.bar.iconFont
+    paintedSize: Style.bar.iconSize
+    Behavior on color { ColorAnimation { duration: Style.duration(160) } }
   }
 
   KeyboardPanel {
