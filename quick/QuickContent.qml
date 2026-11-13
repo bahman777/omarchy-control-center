@@ -28,7 +28,11 @@ Item {
 
   implicitHeight: page === "" ? col.implicitHeight : pageView.implicitHeight
   property string expanded: ""
-  function toggleMenu(id) { expanded = expanded === id ? "" : id }
+  function toggleMenu(id) {
+    expanded = expanded === id ? "" : id
+    if (flick) flick.contentY = 0
+    resetCursor()
+  }
 
   // ------------------------------------------------------------ in-panel pages
   // Settings open inside the panel as a page with a back button; nothing jumps
@@ -737,7 +741,7 @@ Item {
     id: col
     width: parent.width
     spacing: Style.space(14)
-    visible: q.page === ""
+    visible: q.page === "" && q.expanded === ""
 
     // ---------------------------------------------------- header
     Item {
@@ -794,14 +798,16 @@ Item {
       }
     }
 
-    QsMenu {
-      visible: q.expanded === "session"
-      icon: Icons.power
-      title: "Power Off"
-      QsMenuItem { icon: Icons.sleep; text: "Suspend"; onClicked: q.qc.launch(["systemctl", "suspend"], 200) }
-      QsMenuItem { icon: Icons.restart; text: "Restart…"; onClicked: q.qc.launch(["omarchy-system", "reboot"], 150) }
-      QsMenuItem { icon: Icons.power; text: "Power Off…"; onClicked: q.qc.launch(["omarchy-system", "shutdown"], 150) }
-      QsMenuItem { icon: Icons.logout; text: "Log Out…"; separatorAbove: true; onClicked: q.qc.launch(["omarchy-system", "logout"], 150) }
+    Component {
+      id: sessionMenu
+      QsMenu {
+        icon: Icons.power
+        title: "Power Off"
+        QsMenuItem { icon: Icons.sleep; text: "Suspend"; onClicked: q.qc.launch(["systemctl", "suspend"], 200) }
+        QsMenuItem { icon: Icons.restart; text: "Restart…"; onClicked: q.qc.launch(["omarchy-system", "reboot"], 150) }
+        QsMenuItem { icon: Icons.power; text: "Power Off…"; onClicked: q.qc.launch(["omarchy-system", "shutdown"], 150) }
+        QsMenuItem { icon: Icons.logout; text: "Log Out…"; separatorAbove: true; onClicked: q.qc.launch(["omarchy-system", "logout"], 150) }
+      }
     }
 
     // ---------------------------------------------------- now playing
@@ -827,21 +833,23 @@ Item {
         onCommitted: function(v) { if (q.volumeSink && q.volumeSink.audio) q.volumeSink.audio.volume = v }
         onMenuRequested: q.toggleMenu("outputs")
       }
-      QsMenu {
-        visible: q.expanded === "outputs"
-        icon: Icons.speaker
-        title: "Sound Output"
-        Repeater {
-          model: q.expanded === "outputs" ? q.sinks.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, false) } }) : []
-          delegate: QsMenuItem {
-            required property var modelData
-            icon: modelData.icon
-            text: modelData.label
-            checked: (q.defaultSink && q.defaultSink.id === modelData.id) || q.volumeSinkName === modelData.name
-            onClicked: q.qc.setAudioOutput(modelData.id, modelData.name)
+      Component {
+        id: outputsMenu
+        QsMenu {
+                  icon: Icons.speaker
+          title: "Sound Output"
+          Repeater {
+            model: q.expanded === "outputs" ? q.sinks.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, false) } }) : []
+            delegate: QsMenuItem {
+              required property var modelData
+              icon: modelData.icon
+              text: modelData.label
+              checked: (q.defaultSink && q.defaultSink.id === modelData.id) || q.volumeSinkName === modelData.name
+              onClicked: q.qc.setAudioOutput(modelData.id, modelData.name)
+            }
           }
+          QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
         }
-        QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
       }
 
       Column {
@@ -887,18 +895,20 @@ Item {
         onCommitted: function(v) { if (q.defaultSource && q.defaultSource.audio) q.defaultSource.audio.volume = v }
         onMenuRequested: q.toggleMenu("inputs")
       }
-      QsMenu {
-        visible: q.expanded === "inputs"
-        icon: Icons.microphone
-        title: "Sound Input"
-        Repeater {
-          model: q.expanded === "inputs" ? q.sources.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, true) } }) : []
-          delegate: QsMenuItem {
-            required property var modelData
-            icon: modelData.icon
-            text: modelData.label
-            checked: q.defaultSource && q.defaultSource.id === modelData.id
-            onClicked: q.qc.runner.run(["omarchy-audio-input-set-default", String(modelData.id), modelData.name], null)
+      Component {
+        id: inputsMenu
+        QsMenu {
+                  icon: Icons.microphone
+          title: "Sound Input"
+          Repeater {
+            model: q.expanded === "inputs" ? q.sources.map(function(n) { return { id: n.id, name: String(n.name), label: q.nodeLabel(n), icon: q.nodeIcon(n, true) } }) : []
+            delegate: QsMenuItem {
+              required property var modelData
+              icon: modelData.icon
+              text: modelData.label
+              checked: q.defaultSource && q.defaultSource.id === modelData.id
+              onClicked: q.qc.runner.run(["omarchy-audio-input-set-default", String(modelData.id), modelData.name], null)
+            }
           }
         }
       }
@@ -971,25 +981,6 @@ Item {
             }
           }
 
-          Loader {
-            width: parent.width
-            active: pairRow.ids.indexOf(q.expanded) >= 0
-            visible: active
-            sourceComponent: q.expanded === "wifi" ? wifiMenu
-              : q.expanded === "bluetooth" ? btMenu
-              : q.expanded === "tailscale" ? tsMenu
-              : q.expanded === "vpn" ? vpnMenu
-              : q.expanded === "power" ? powerMenu
-              : q.expanded === "night" ? nightMenu
-              : q.expanded === "sound" ? soundMenu
-              : q.expanded === "display" ? displayMenu
-              : q.expanded === "layout" ? layoutMenu
-              : q.expanded === "printers" ? printerMenu
-              : q.expanded === "scanners" ? scannerMenu
-              : q.expanded === "record" ? recordMenu
-              : q.expanded === "reminders" ? reminderMenu
-              : q.expanded === "sudo" ? sudoMenu : null
-          }
         }
       }
     }
@@ -1023,15 +1014,6 @@ Item {
             onMenuRequested: q.toggleMenu(modelData.id)
           }
         }
-      }
-      Loader {
-        width: parent.width
-        active: q.chipIdList.indexOf(q.expanded) >= 0
-        visible: active
-        sourceComponent: q.expanded === "record" ? recordMenu
-          : q.expanded === "reminders" ? reminderMenu
-          : q.expanded === "vpn" ? vpnMenu
-          : q.expanded === "sudo" ? sudoMenu : null
       }
     }
 
@@ -1104,6 +1086,33 @@ Item {
         trailing: "\uf054"
         onClicked: q.openPage("notifications")
       }
+    }
+  }
+
+  // ================================================================ menu view
+  // A tile's, slider's or chip's menu takes over the panel (like macOS
+  // Control Center) instead of growing it in place; back or Esc returns.
+  readonly property var menuComponents: ({
+    wifi: wifiMenu, bluetooth: btMenu, tailscale: tsMenu, vpn: vpnMenu, power: powerMenu,
+    night: nightMenu, sound: soundMenu, display: displayMenu, layout: layoutMenu,
+    printers: printerMenu, scanners: scannerMenu, record: recordMenu, reminders: reminderMenu,
+    sudo: sudoMenu, session: sessionMenu, outputs: outputsMenu, inputs: inputsMenu
+  })
+  Column {
+    id: menuView
+    width: parent.width
+    spacing: Style.space(10)
+    visible: q.page === "" && q.expanded !== ""
+
+    QsRoundButton {
+      icon: "\uf053"
+      tip: "Back (Esc)"
+      onClicked: { q.expanded = ""; q.resetCursor() }
+    }
+    Loader {
+      width: parent.width
+      active: menuView.visible
+      sourceComponent: q.menuComponents[q.expanded] || null
     }
   }
 
