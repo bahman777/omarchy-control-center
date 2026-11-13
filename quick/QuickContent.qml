@@ -811,9 +811,9 @@ Item {
         MouseArea { id: batMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: q.openPage("power") }
         PanelToolTip {
           visible: batMouse.containsMouse || batChip.hasCursor
-          text: q.hasBattery ? (UPower.onBattery ? "On battery" : "Plugged in")
-            + (q.battery.timeToEmpty > 0 && UPower.onBattery ? " · " + Math.round(q.battery.timeToEmpty / 60) + " min left" : "")
-            + (q.battery.timeToFull > 0 && !UPower.onBattery ? " · full in " + Math.round(q.battery.timeToFull / 60) + " min" : "")
+          text: q.hasBattery ? (!q.qc.plugged ? "On battery" : "Plugged in")
+            + (q.battery.timeToEmpty > 0 && !q.qc.plugged ? " · " + Math.round(q.battery.timeToEmpty / 60) + " min left" : "")
+            + (q.battery.timeToFull > 0 && q.qc.plugged ? " · full in " + Math.round(q.battery.timeToFull / 60) + " min" : "")
             + " — battery & power settings" : ""
         }
       }

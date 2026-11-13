@@ -13,7 +13,9 @@ CcPage {
 
   readonly property var battery: UPower.displayDevice
   readonly property bool hasBattery: !!battery && battery.isPresent && battery.isLaptopBattery !== false
-  readonly property bool onBattery: UPower.onBattery
+  // Not "onBattery": a name starting with "on" + capital is read as a signal
+  // handler, and the property always read false ("Plugged in" on battery).
+  readonly property bool isOnBattery: UPower.onBattery
   // Stay awake lives in ~/.local/state/omarchy/indicators/stay-awake; the
   // shell's idle service watches it, so the CLI keeps everything in sync.
   property bool stayAwake: false
@@ -126,10 +128,10 @@ CcPage {
     title: "Battery"
     CcRow {
       icon: page.battery && page.battery.state === UPowerDeviceState.Charging ? Icons.batteryCharging : Icons.battery
-      iconColor: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery ? page.cc.urgent : page.cc.fg
-      title: page.onBattery ? "On battery" : "Plugged in"
+      iconColor: page.hasBattery && page.battery.percentage < 0.15 && page.isOnBattery ? page.cc.urgent : page.cc.fg
+      title: page.isOnBattery ? "On battery" : "Plugged in"
       subtitle: page.batteryText()
-      CcLevelBar { level: page.hasBattery ? page.battery.percentage : 0; low: page.hasBattery && page.battery.percentage < 0.15 && page.onBattery }
+      CcLevelBar { level: page.hasBattery ? page.battery.percentage : 0; low: page.hasBattery && page.battery.percentage < 0.15 && page.isOnBattery }
     }
     CcRow {
       visible: page.hasBattery && page.battery.healthSupported
@@ -159,7 +161,7 @@ CcPage {
   CcGroup {
     visible: page.profiles.length > 0
     title: "Power mode"
-    subtitle: "Remembered separately for " + (page.onBattery ? "battery" : "AC power")
+    subtitle: "Remembered separately for " + (page.isOnBattery ? "battery" : "AC power")
     CcChoiceRow {
       icon: Icons.bolt
       title: "Mode"
@@ -169,7 +171,7 @@ CcPage {
       value: page.activeProfile
       onPicked: function(v) {
         page.activeProfile = v
-        page.cc.runner.run(["omarchy-powerprofiles-set", page.onBattery ? "battery" : "ac", v], function() { page.refreshProfiles() })
+        page.cc.runner.run(["omarchy-powerprofiles-set", page.isOnBattery ? "battery" : "ac", v], function() { page.refreshProfiles() })
       }
     }
   }
