@@ -1042,6 +1042,15 @@ Item {
           font.family: Style.font.menuFamily
           font.pixelSize: Style.font.subtitle
           font.weight: Font.DemiBold
+          font.underline: notifHeadMouse.containsMouse
+          // The heading opens the full list too.
+          MouseArea {
+            id: notifHeadMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: q.openPage("notifications")
+          }
         }
         Row {
           anchors.right: parent.right
@@ -1071,7 +1080,7 @@ Item {
       }
 
       Repeater {
-        model: q.notifActive ? q.notif.rows.slice(0, 3) : []
+        model: q.notifActive ? q.notif.rows.slice(0, q.notifShown) : []
         delegate: NotifCard {
           required property var modelData
           row: modelData
@@ -1081,7 +1090,7 @@ Item {
         }
       }
       QsMenuItem {
-        visible: q.notifActive && q.notif.count > 3
+        visible: q.notifActive && q.notif.count > q.notifShown
         text: "Show All " + (q.notifActive ? q.notif.count : 0) + " Notifications"
         trailing: "\uf054"
         onClicked: q.openPage("notifications")
@@ -1119,6 +1128,9 @@ Item {
   // ================================================================ notifications
   readonly property var notif: qc.notifService
   readonly property bool notifActive: !!notif && notif.active
+  // Cards shown in the panel: two, or one while the music card takes room;
+  // the rest are behind "Show All".
+  readonly property int notifShown: qc.showNowPlaying ? 1 : 2
 
   // ================================================================ page view
   Column {

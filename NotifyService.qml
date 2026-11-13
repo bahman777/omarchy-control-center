@@ -424,9 +424,50 @@ Scope {
     return null
   }
 
+  // ------------------------------------------------------------ history
+  // The list survives shell restarts: rows are saved (newest 50, mode 600)
+  // and come back as "archived" rows, with no actions or reply, since their
+  // sender can't be reached any more. Image-provider URLs don't survive a
+  // restart either, so only file images are kept.
+  readonly property string historyPath: stateDir + "/notification-history.json"
+  property var archived: []
+  property bool historyLoaded: false
+  Process {
+    running: true
+    command: ["sh", "-c", "umask 077; mkdir -p \"$1\"; [ -e \"$2\" ] || echo '[]' > \"$2\"; chmod 600 \"$2\"", "sh", svc.stateDir, svc.historyPath]
+    onExited: historyFile.reload()
+  }
+  FileView {
+    id: historyFile
+    path: svc.historyPath
+    printErrors: false
+    onLoaded: {
+      if (svc.historyLoaded) return
+      var list = []
+      try { list = JSON.parse(text()) || [] } catch (e) { list = [] }
+      svc.archived = list.slice(0, 50).map(function(r, i) {
+        return { id: "a" + i + "-" + (r.time || 0), appName: String(r.appName || ""), appIcon: String(r.appIcon || ""),
+                 image: String(r.image || ""), summary: String(r.summary || ""), body: String(r.body || ""),
+                 urgency: Number(r.urgency) || 1, actions: [], hasDefault: false, hasReply: false,
+                 replyPlaceholder: "", time: Number(r.time) || 0, archived: true }
+      })
+      svc.historyLoaded = true
+    }
+  }
+  Timer { id: historySave; interval: 1000; onTriggered: svc.saveHistory() }
+  onRowsChanged: if (historyLoaded) historySave.restart()
+  function saveHistory() {
+    var out = rows.slice(0, 50).map(function(r) {
+      var img = String(r.image || "")
+      return { appName: r.appName, appIcon: r.appIcon, image: img.indexOf("/") === 0 || img.indexOf("file:") === 0 ? img : "",
+               summary: r.summary, body: r.body, urgency: r.urgency, time: r.time }
+    })
+    historyFile.setText(JSON.stringify(out) + "\n")
+  }
+
   // Plain snapshots for the UI, newest first.
   readonly property var rows: {
-    var list = []
+    var list = archived.slice()
     for (var i = 0; i < tracked.length; i++) {
       var n = tracked[i]
       if (!n) continue
@@ -477,11 +518,13 @@ Scope {
   // ------------------------------------------------------------ actions
   function hidePopup(id) { popupIds = popupIds.filter(function(x) { return x !== id }) }
   function dismiss(id) {
+    if (typeof id === "string") { archived = archived.filter(function(r) { return r.id !== id }); return }
     var n = byId(id)
     hidePopup(id)
     if (n) n.dismiss()
   }
   function clearAll() {
+    archived = []
     var all = tracked.slice()
     popupIds = []
     for (var i = 0; i < all.length; i++) if (all[i]) all[i].dismiss()
