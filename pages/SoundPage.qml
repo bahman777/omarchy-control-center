@@ -56,7 +56,7 @@ CcPage {
   function pct(v) { return Math.round(v * 100) + "%" }
 
   function setOutput(n) {
-    cc.runner.run(["omarchy-audio-output-set-default", String(n.id), String(n.name)], null)
+    cc.setAudioOutput(n.id, n.name)
   }
   function setInput(n) {
     cc.runner.run(["omarchy-audio-input-set-default", String(n.id), String(n.name)], null)

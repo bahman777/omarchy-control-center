@@ -100,6 +100,10 @@ Panel {
     for (var i = 0; i < ps.length; i++) if (ps[i] && ps[i].isPlaying && String(ps[i].dbusName || "").indexOf("playerctld") < 0) return ps[i]
     return null
   }
+  // Audio output switch used by the Sound menu and page (see tools/audio-output.sh).
+  readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
+  function setAudioOutput(id, name) { runner.run(["bash", pluginDir + "/tools/audio-output.sh", String(id), String(name)], null) }
+
   // The Now Playing card stays for 30 s after the music pauses or stops, then
   // goes away. Kept here because the panel's contents are rebuilt on open.
   property bool musicLinger: false

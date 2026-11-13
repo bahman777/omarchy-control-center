@@ -733,7 +733,7 @@ Item {
             icon: modelData.icon
             text: modelData.label
             checked: (q.defaultSink && q.defaultSink.id === modelData.id) || q.volumeSinkName === modelData.name
-            onClicked: q.qc.runner.run(["omarchy-audio-output-set-default", String(modelData.id), modelData.name], null)
+            onClicked: q.qc.setAudioOutput(modelData.id, modelData.name)
           }
         }
         QsMenuItem { text: "Sound Settings"; separatorAbove: true; onClicked: q.openPage("sound") }
@@ -1190,7 +1190,7 @@ Item {
           icon: modelData.icon
           text: modelData.label
           checked: (q.defaultSink && q.defaultSink.id === modelData.id) || q.volumeSinkName === modelData.name
-          onClicked: q.qc.runner.run(["omarchy-audio-output-set-default", String(modelData.id), modelData.name], null)
+          onClicked: q.qc.setAudioOutput(modelData.id, modelData.name)
         }
       }
       QsMenuItem {
