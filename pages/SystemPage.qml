@@ -138,7 +138,8 @@ CcPage {
         value: page.language
         foreground: page.cc.fg
         onChanged: function(v) {
-          if (v && v !== page.language) page.cc.runner.run(["omarchy-language", v], function() { page.refresh() })
+          // The code ends up inside a Lua string (hyprctl eval) in omarchy-language.
+          if (v && v !== page.language && /^[A-Za-z]{2,3}([_-][A-Za-z0-9]{2,4})?(\.[A-Za-z0-9-]{1,10})?(@[A-Za-z]{1,10})?$/.test(v)) page.cc.runner.run(["omarchy-language", v], function() { page.refresh() })
         }
       }
     }

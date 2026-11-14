@@ -245,4 +245,14 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    argv = sys.argv
+    # The panel passes its arguments (private iCal links among them) in the
+    # environment, which only this account can read, not on the command
+    # line, which every local account can see.
+    if len(argv) > 1 and argv[1] == "--args-from-env":
+        try:
+            extra = json.loads(os.environ.pop("CC_CALENDAR_ARGS", "[]"))
+        except ValueError:
+            extra = []
+        argv = [argv[0]] + [str(a) for a in extra if isinstance(a, (str, int, float))]
+    sys.exit(main(argv))

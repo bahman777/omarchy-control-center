@@ -363,8 +363,16 @@ Item {
   // Night Light schedule and look, from tools/nightlight.py (writes hyprsunset.conf).
   property var nl: ({})
   readonly property string nlTool: Qt.resolvedUrl("../tools/nightlight.py").toString().replace(/^file:\/\//, "").replace(/\?.*$/, "")
+  // One status check at a time, each capped, so a check that hangs can't
+  // pile up helpers under the 4-second refresh.
+  property bool nlChecking: false
   function refreshNight() {
-    qc.runner.run(["python3", "-I", nlTool, "status"], function(code, out) { try { q.nl = JSON.parse(out) } catch (e) {} })
+    if (nlChecking) return
+    nlChecking = true
+    qc.runner.run(["timeout", "10", "python3", "-I", nlTool, "status"], function(code, out) {
+      q.nlChecking = false
+      try { q.nl = JSON.parse(out) } catch (e) {}
+    })
   }
   function nightSet(args) {
     // Optimistic: show the change now, then read back what was applied.

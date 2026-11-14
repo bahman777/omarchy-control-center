@@ -17,6 +17,7 @@ import math
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -24,7 +25,9 @@ HOME = os.path.expanduser("~")
 STATE = os.path.join(HOME, ".local/state/omarchy/control-center/nightlight.json")
 CONF = os.path.join(HOME, ".config/hypr/hyprsunset.conf")
 BACKUP = CONF + ".before-control-center"
-LATLON = ["/tmp/latlon.txt", os.path.join(HOME, "tmp/latlon.txt")]
+# Your own "lat lon" files only. Not /tmp: any local account can create files
+# (or a blocking FIFO) there.
+LATLON = [os.path.join(HOME, ".local/state/omarchy/control-center/location.txt"), os.path.join(HOME, "tmp/latlon.txt")]
 HEADER = "# Managed by Control Center (Quick Settings → Night Light).\n# Change it there; edits here are replaced.\n"
 
 
@@ -88,8 +91,19 @@ def latlon():
     for a sunset schedule."""
     for p in LATLON:
         try:
-            a, b = open(p).read().split()[:2]
-            return float(a), float(b)
+            # A small regular file of yours, opened without blocking: never a
+            # FIFO or device, and never someone else's file.
+            fd = os.open(p, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_size > 4096:
+                    continue
+                a, b = os.read(fd, 4096).decode("utf-8", "replace").split()[:2]
+            finally:
+                os.close(fd)
+            lat, lon = float(a), float(b)
+            if -90 <= lat <= 90 and -180 <= lon <= 180:
+                return lat, lon
         except (OSError, ValueError):
             continue
     return tz_latlon()

@@ -308,7 +308,10 @@ Scope {
   function calRun(args, done) {
     if (calProc.running) { calQueued = { args: args, done: done || null }; return }
     calOnDone = done || null
-    calProc.command = ["python3", "-I", pluginDir + "/tools/calendar.py"].concat(args && args.length ? args : ["events"])
+    // Arguments (private iCal links) go in the environment, readable only by
+    // this account, not on the command line every local account can see.
+    calProc.environment = { CC_CALENDAR_ARGS: JSON.stringify(args && args.length ? args : ["events"]) }
+    calProc.command = ["python3", "-I", pluginDir + "/tools/calendar.py", "--args-from-env"]
     calBusy = true
     calProc.running = true
   }
@@ -348,11 +351,12 @@ Scope {
   function sendEventReminder(e, mins, calName) {
     var title = (mins <= 0 ? "Starting now: " : "In " + mins + " min: ") + e.title
     var body = hm(e.start) + " – " + hm(e.end) + (e.location && !e.join ? " · " + e.location : "") + (calName ? " · " + calName : "")
-    var args = ["-a", "Calendar", "-u", "normal", "-t", "10000"]
-    if (e.join) args = args.concat(["-A", "join=Join"])
-    // With an action notify-send waits for the click; Join opens the link.
-    Quickshell.execDetached(["bash", "-c", 'j="$1"; shift; a=$(timeout 3600 notify-send "$@"); [ "$a" = join ] && [ -n "$j" ] && xdg-open "$j"',
-      "remind", e.join || ""].concat(args).concat([title, body]))
+    // Title, details and link go in the environment (only this account can
+    // read it), not on notify-send's command line (every account can).
+    Quickshell.execDetached({
+      command: ["python3", "-I", pluginDir + "/tools/remind.py"],
+      environment: { CC_REMINDER: JSON.stringify({ title: title, body: body, join: e.join || "" }) }
+    })
   }
 
   // ------------------------------------------------------------ night light
@@ -362,7 +366,7 @@ Scope {
     interval: 3600000; running: true; repeat: true; triggeredOnStart: true
     onTriggered: {
       var h = new Date().getHours()
-      if (h >= 10 && h < 16) Quickshell.execDetached(["python3", "-I", svc.pluginDir + "/tools/nightlight.py", "apply"])
+      if (h >= 10 && h < 16) Quickshell.execDetached(["timeout", "60", "python3", "-I", svc.pluginDir + "/tools/nightlight.py", "apply"])
     }
   }
 
