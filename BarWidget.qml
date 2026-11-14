@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import QtQuick.Controls
 import Quickshell.Networking
 import Quickshell.Bluetooth
@@ -106,6 +107,48 @@ Panel {
     return null
   }
   // Audio output switch used by the Sound menu and page (see tools/audio-output.sh).
+  // ------------------------------------------------------------ glass border
+  // The saved glass border's rim follows the wallpaper: when the wallpaper
+  // changes, read its colours (tools/wallpaper-palette.py), re-tint the rim,
+  // save and apply. Also re-applied after a Hyprland config reload, so it
+  // holds even before "Keep after restart".
+  property string wallpaperPath: ""
+  function refreshBorderPalette(force) {
+    var b = hypr.border
+    if (!b || !b.followWallpaper) return
+    runner.run(["python3", "-I", pluginDir + "/tools/wallpaper-palette.py"], function(code, out) {
+      var p = null
+      try { p = JSON.parse(out) } catch (e) { return }
+      if (!p || !p.accent) return
+      var cur = hypr.border
+      if (!cur) return
+      if (!force && cur.palette && cur.palette.path === p.path && cur.palette.accent === p.accent) return
+      var next = {}
+      for (var k in cur) next[k] = cur[k]
+      next.palette = { accent: p.accent, base: p.base || p.accent, path: p.path }
+      hypr.saveBorder(next)
+      hypr.previewBorder(next)
+    })
+  }
+  Timer {
+    interval: 10000; running: true; repeat: true; triggeredOnStart: true
+    onTriggered: root.runner.run(["readlink", "-f", Quickshell.env("HOME") + "/.local/state/omarchy/current/background"], function(code, out) {
+      var p = String(out).trim()
+      if (!p || p === root.wallpaperPath) return
+      var first = root.wallpaperPath === ""
+      root.wallpaperPath = p
+      // At start: put the saved border back (then re-tint if the wallpaper
+      // changed meanwhile). Later: re-tint for the new wallpaper.
+      if (first && root.hypr.border) root.hypr.previewBorder(root.hypr.border)
+      root.refreshBorderPalette(false)
+    })
+  }
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) { if (event.name === "configreloaded" && root.hypr.border) borderReapply.restart() }
+  }
+  Timer { id: borderReapply; interval: 300; onTriggered: if (root.hypr.border) root.hypr.previewBorder(root.hypr.border) }
+
   // hyprglass loaded? (shows the Glass settings page)
   property bool hasHyprglass: false
   Timer {

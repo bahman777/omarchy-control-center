@@ -116,3 +116,82 @@ function savedLua(values) {
     + "  hg.config({ default_preset = \"" + SAVED_PRESET + "\" })\n"
     + "end\n"
 }
+
+// ------------------------------------------------------------ glass border
+// Hyprland borders take up to 10 colour stops with alpha, and the
+// `borderangle` loop animation turns them. Mostly see-through frosted stops
+// plus a bright glint read as light travelling around a glass rim. The rim
+// can take its tint from the wallpaper's colours (see tools/wallpaper-palette.py).
+var BORDER_DEFAULTS = {
+  style: "glass",          // "glass" or "own" (leave the config's border alone)
+  width: 6,                // px
+  followWallpaper: true,
+  wallpaperMix: 0.55,      // 0 white rim .. 1 the wallpaper's colour
+  rimColor: 0xcfe8ff,      // when not following the wallpaper (RRGGBB)
+  rimStrength: 0.28,       // rim opacity
+  glint: 0.93,             // glint opacity
+  glintColor: 0xffffff,    // RRGGBB
+  glintLength: "short",    // "short" spark or "long" sheen
+  seconds: 8,              // one turn
+  palette: null            // { accent: "rrggbb", base: "rrggbb", path }
+}
+
+function cleanBorder(b) {
+  b = b || {}
+  var d = BORDER_DEFAULTS, o = {}
+  o.style = b.style === "own" ? "own" : "glass"
+  function num(v, lo, hi, def) { var x = Number(v); return isFinite(x) ? Math.max(lo, Math.min(hi, x)) : def }
+  function rgb(v, def) { var x = typeof v === "string" ? parseInt(v.replace(/^#|^0x/i, ""), 16) : Number(v); return isFinite(x) && x >= 0 && x <= 0xFFFFFF ? Math.floor(x) : def }
+  o.width = Math.round(num(b.width, 1, 12, d.width))
+  o.followWallpaper = b.followWallpaper === undefined ? d.followWallpaper : !!b.followWallpaper
+  o.wallpaperMix = num(b.wallpaperMix, 0, 1, d.wallpaperMix)
+  o.rimColor = rgb(b.rimColor, d.rimColor)
+  o.rimStrength = num(b.rimStrength, 0, 1, d.rimStrength)
+  o.glint = num(b.glint, 0, 1, d.glint)
+  o.glintColor = rgb(b.glintColor, d.glintColor)
+  o.glintLength = b.glintLength === "long" ? "long" : "short"
+  o.seconds = num(b.seconds, 2, 60, d.seconds)
+  var p = b.palette
+  o.palette = p && /^[0-9a-f]{6}$/i.test(String(p.accent)) ? { accent: String(p.accent).toLowerCase(), base: /^[0-9a-f]{6}$/i.test(String(p.base)) ? String(p.base).toLowerCase() : String(p.accent).toLowerCase(), path: String(p.path || "") } : null
+  return o
+}
+
+function rgbHex(n) { var h = (Number(n) >>> 0 & 0xFFFFFF).toString(16); while (h.length < 6) h = "0" + h; return h }
+function mixHex(a, b, t) {
+  var x = parseInt(a, 16), y = parseInt(b, 16), out = 0
+  for (var s = 16; s >= 0; s -= 8) out = out * 256 + Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t)
+  return rgbHex(out)
+}
+function alphaHex(a) { var h = Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16); return h.length < 2 ? "0" + h : h }
+
+// The rim's two tones: from the wallpaper when following it, else rimColor.
+function rimTones(b) {
+  b = cleanBorder(b)
+  if (b.followWallpaper && b.palette)
+    return [mixHex("ffffff", b.palette.accent, b.wallpaperMix), mixHex("ffffff", b.palette.base, b.wallpaperMix)]
+  var c = rgbHex(b.rimColor)
+  return [c, mixHex(c, "ffffff", 0.35)]
+}
+
+function borderColors(b) {
+  b = cleanBorder(b)
+  var t = rimTones(b), a = alphaHex(b.rimStrength), a2 = alphaHex(Math.min(1, b.rimStrength * 1.5))
+  var r1 = "rgba(" + t[0] + a + ")", r2 = "rgba(" + t[1] + a2 + ")"
+  var g = "rgba(" + rgbHex(b.glintColor) + alphaHex(b.glint) + ")"
+  var e = "rgba(" + mixHex(rgbHex(b.glintColor), t[0], 0.5) + alphaHex(b.glint * 0.6) + ")"
+  return b.glintLength === "long" ? [r1, r2, e, g, g, e, r2, r1] : [r1, r2, r1, g, e, r1, r2, r1]
+}
+
+function inactiveColor(b) {
+  b = cleanBorder(b)
+  return "rgba(" + rimTones(b)[0] + alphaHex(b.rimStrength * 0.7) + ")"
+}
+
+function borderLua(b) {
+  b = cleanBorder(b)
+  if (b.style !== "glass") return ""
+  return "hl.config({ general = { border_size = " + b.width + ", col = { active_border = { colors = { "
+    + borderColors(b).map(function(c) { return "\"" + c + "\"" }).join(", ")
+    + " }, angle = 45 }, inactive_border = \"" + inactiveColor(b) + "\" } } })\n"
+    + "hl.animation({ leaf = \"borderangle\", enabled = true, speed = " + Math.round(b.seconds * 10) + ", bezier = \"linear\", style = \"loop\" })\n"
+}

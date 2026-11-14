@@ -20,6 +20,8 @@ Item {
   property var monitors: ({})
   // hyprglass look saved from the Glass page ({ setting: value }), or null.
   property var glass: null
+  // Glass border (GlassSpec.BORDER_DEFAULTS shape), or null for the config's own.
+  property var border: null
   property bool loaded: false
   property string lastError: ""
 
@@ -65,7 +67,7 @@ Item {
   // hyprland.lua only loads control-center.lua after the user agrees to it
   // (installInclude). Until then changes are live for this session only.
   property bool includeInstalled: false
-  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0 || !!glass
+  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0 || !!glass || !!border
   readonly property bool sessionOnly: hasChanges && !includeInstalled
 
   function checkInclude() {
@@ -117,11 +119,21 @@ Item {
     persistTimer.restart()
   }
 
+  function previewBorder(b) {
+    var lua = Glass.borderLua(b)
+    if (lua) runner.run(["hyprctl", "eval", lua], null)
+  }
+  function saveBorder(b) {
+    border = b && Glass.cleanBorder(b).style === "glass" ? Glass.cleanBorder(b) : null
+    persistTimer.restart()
+  }
+
   function resetAll() {
     overrides = ({})
     monitors = ({})
     glass = null
-    stateFile.setText("{\"options\": {}, \"monitors\": {}, \"glass\": null}\n")
+    border = null
+    stateFile.setText("{\"options\": {}, \"monitors\": {}, \"glass\": null, \"border\": null}\n")
     luaFile.setText("-- Control Center: no window settings overridden.\n")
     runner.run(["hyprctl", "reload"], function() { refreshLater.restart() })
   }
@@ -130,9 +142,10 @@ Item {
     id: persistTimer
     interval: 600
     onTriggered: {
-      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors, glass: root.glass }, null, 2) + "\n")
+      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors, glass: root.glass, border: root.border }, null, 2) + "\n")
       luaFile.setText(Spec.overridesFile(root.overrides, root.monitors)
-        + (root.glass ? "\n-- Glass look (hyprglass), from the Glass page\n" + Glass.savedLua(root.glass) : ""))
+        + (root.glass ? "\n-- Glass look (hyprglass), from the Glass page\n" + Glass.savedLua(root.glass) : "")
+        + (root.border ? "\n-- Glass border, from the Glass page (rim follows the wallpaper: " + (root.border.followWallpaper ? "yes" : "no") + ")\n" + Glass.borderLua(root.border) : ""))
     }
   }
 
@@ -168,6 +181,7 @@ Item {
           Glass.SETTINGS.forEach(function(s) { var v = Glass.clean(s.key, o.glass[s.key]); if (v !== undefined) g[s.key] = v })
           root.glass = g
         } else root.glass = null
+        root.border = o.border && typeof o.border === "object" ? Glass.cleanBorder(o.border) : null
       } catch (e) { root.overrides = ({}) }
     }
   }
