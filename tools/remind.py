@@ -18,10 +18,11 @@ from gi.repository import Gio, GLib  # noqa: E402
 
 def from_reminder_file(path):
     """A reminder set by tools/reminder.py: its message file, in this
-    account's runtime folder. Read, then removed (Omarchy's list stops
+    plugin's private runtime folder. Read, then removed (Omarchy's list stops
     showing it), and the bar indicator refreshed."""
-    folder = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), "omarchy-reminders")
-    if not folder or os.path.dirname(os.path.realpath(path)) != os.path.realpath(folder):
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    folder = os.path.join(runtime, "control-center", "reminders")
+    if not runtime or os.path.dirname(os.path.realpath(path)) != os.path.realpath(folder):
         return None
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
