@@ -449,16 +449,20 @@ Item {
     recording = false
     qc.runner.run(["omarchy-capture-screenrecording", "--stop-recording"], function() { q.refreshSlow() })
   }
+  readonly property string reminderTool: Qt.resolvedUrl("../tools/reminder.py").toString().replace(/^file:\/\//, "").replace(/\?.*$/, "")
   function addReminder(minutes, message) {
     var m = Math.round(Number(minutes))
     if (!isFinite(m) || m < 1 || m > 10080) { qc.toast("Minutes must be 1–10080"); return }
-    var argv = ["omarchy-reminder", String(m)]
     var msg = String(message || "").replace(/[\x00-\x1f]/g, " ").trim().slice(0, 200)
-    if (msg !== "") argv.push(msg)
-    qc.runner.run(argv, function(code) {
+    var done = function(code) {
       q.qc.toast(code === 0 ? "Reminder set for " + m + " min" : "Could not set reminder")
       q.refreshSlow()
-    })
+    }
+    // Without text, Omarchy's own command. With text, our helper: the same
+    // kind of reminder (Omarchy lists and clears it), but the text goes on
+    // stdin and into a private file, never on a command line.
+    if (msg === "") qc.runner.run(["omarchy-reminder", String(m)], done)
+    else qc.runner.runWithInput(["python3", "-I", reminderTool, "set", String(m)], msg, done)
   }
   function cancelReminder(timer) {
     if (!/^omarchy-reminder-[A-Za-z0-9_.-]+\.timer$/.test(timer)) return
