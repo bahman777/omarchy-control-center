@@ -166,7 +166,8 @@ Panel {
   function spark() {
     var b = Glass.cleanBorder(liveBorder)
     sparkAngle = Math.floor(Math.random() * 360)
-    runner.run(["hyprctl", "eval", Glass.colorsLua(Glass.sparkColors(b, Math.floor(Math.random() * 8)), sparkAngle)], null)
+    runner.run(["hyprctl", "eval", Glass.colorsLua(Glass.sparkColors(b, Math.floor(Math.random() * Glass.STOPS)), sparkAngle)], null)
+    sparkOff.interval = Math.round(b.sparkHold * 1000)
     sparkOff.restart()
   }
   Timer { id: sparkTimer; repeat: false; onTriggered: { if (root.sparkling) { root.spark(); root.sparkNext() } } }

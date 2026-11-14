@@ -145,6 +145,8 @@ var BORDER_DEFAULTS = {
   style: "glass",          // "glass" or "own" (leave the config's border alone)
   mode: "travel",          // "travel" (light circles), "sparkle" (random sparks), "still"
   sparkRate: 20,           // sparkle: sparks per minute, on average
+  sparkSize: "medium",     // "small" (1 point lit), "medium" (3), "large" (5)
+  sparkHold: 0.6,          // seconds a spark stays lit before it fades
   sparkColor: "white",     // "white" or "wallpaper" (the glint takes the wallpaper's accent)
   width: 6,                // px
   followWallpaper: true,
@@ -176,6 +178,8 @@ function cleanBorder(b) {
   o.glintLength = b.glintLength === "long" ? "long" : "short"
   o.seconds = num(b.seconds, 2, 60, d.seconds)
   o.sparkRate = Math.round(num(b.sparkRate, 2, 120, d.sparkRate))
+  o.sparkSize = b.sparkSize === "small" || b.sparkSize === "large" ? b.sparkSize : "medium"
+  o.sparkHold = Math.round(num(b.sparkHold, 0.15, 2, d.sparkHold) * 100) / 100
   var p = b.palette
   o.palette = p && /^[0-9a-f]{6}$/i.test(String(p.accent)) ? { accent: String(p.accent).toLowerCase(), base: /^[0-9a-f]{6}$/i.test(String(p.base)) ? String(p.base).toLowerCase() : String(p.accent).toLowerCase(), path: String(p.path || "") } : null
   return o
@@ -199,16 +203,25 @@ function rimTones(b) {
 }
 
 // The glint's colour: its own, or a bright take on the wallpaper's accent.
+// Kept close to white so it reads as light; the wallpaper's colour is
+// stronger in the halo around it (haloHex).
 function glintHex(b) {
   b = cleanBorder(b)
-  if (b.sparkColor === "wallpaper" && b.palette) return mixHex("ffffff", b.palette.accent, 0.6)
+  if (b.sparkColor === "wallpaper" && b.palette) return mixHex("ffffff", b.palette.accent, 0.25)
   return rgbHex(b.glintColor)
 }
+function haloHex(b) {
+  b = cleanBorder(b)
+  if (b.sparkColor === "wallpaper" && b.palette) return mixHex("ffffff", b.palette.accent, 0.65)
+  return mixHex(rgbHex(b.glintColor), rimTones(b)[0], 0.4)
+}
 
+// Ten stops (Hyprland's most) so a spark can be placed finely.
+var STOPS = 10
 function rimStops(b) {
   var t = rimTones(b), a = alphaHex(b.rimStrength), a2 = alphaHex(Math.min(1, b.rimStrength * 1.5))
   var r1 = "rgba(" + t[0] + a + ")", r2 = "rgba(" + t[1] + a2 + ")"
-  return [r1, r2, r1, r1, r2, r1, r2, r1]
+  return [r1, r2, r1, r1, r2, r1, r2, r1, r1, r2]
 }
 
 function borderColors(b) {
@@ -222,15 +235,19 @@ function borderColors(b) {
   return b.glintLength === "long" ? [r1, r2, e, g, g, e, r2, r1] : [r1, r2, r1, g, e, r1, r2, r1]
 }
 
-// Sparkle: the rim with one spark at stop `pos` (0-7), and its soft halo.
+// Sparkle: the rim with a spark centred at stop `pos` (0-9): a bright core
+// (1, 3 or 5 stops for small/medium/large) and a halo on each side.
 function sparkColors(b, pos) {
   b = cleanBorder(b)
-  var stops = rimStops(b), gh = glintHex(b), t = rimTones(b)
-  var e = "rgba(" + mixHex(gh, t[0], 0.4) + alphaHex(b.glint * 0.55) + ")"
-  pos = Math.max(0, Math.min(7, pos))
-  stops[pos] = "rgba(" + gh + alphaHex(b.glint) + ")"
-  if (pos > 0) stops[pos - 1] = e
-  if (pos < 7) stops[pos + 1] = e
+  var stops = rimStops(b)
+  var core = "rgba(" + glintHex(b) + alphaHex(b.glint) + ")"
+  var halo = "rgba(" + haloHex(b) + alphaHex(Math.min(1, b.glint * 0.75)) + ")"
+  var half = b.sparkSize === "small" ? 0 : b.sparkSize === "large" ? 2 : 1
+  pos = Math.max(0, Math.min(STOPS - 1, pos))
+  for (var i = pos - half - 1; i <= pos + half + 1; i++) {
+    if (i < 0 || i >= STOPS) continue
+    stops[i] = Math.abs(i - pos) <= half ? core : halo
+  }
   return stops
 }
 function colorsLua(colors, angle) {
@@ -238,9 +255,10 @@ function colorsLua(colors, angle) {
     + colors.map(function(c) { return "\"" + c + "\"" }).join(", ") + " }, angle = " + Math.round(angle) + " } } } })"
 }
 
+// Other windows: a fainter rim and no sparks, so the focused one stands out.
 function inactiveColor(b) {
   b = cleanBorder(b)
-  return "rgba(" + rimTones(b)[0] + alphaHex(b.rimStrength * 0.7) + ")"
+  return "rgba(" + rimTones(b)[0] + alphaHex(b.rimStrength * 0.4) + ")"
 }
 
 function borderLua(b) {

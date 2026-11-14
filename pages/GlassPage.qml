@@ -338,6 +338,23 @@ CcPage {
       onCommitted: function(val) { page.bset("sparkRate", Math.round(val)) }
     }
     CcChoiceRow {
+      visible: page.bwork.style === "glass" && page.bwork.mode === "sparkle"
+      title: "Spark size"
+      subtitle: "How much of the rim each spark lights up"
+      options: [{ value: "small", label: "Small" }, { value: "medium", label: "Medium" }, { value: "large", label: "Large" }]
+      value: page.bwork.sparkSize
+      onPicked: function(val) { page.bset("sparkSize", val) }
+    }
+    CcSliderRow {
+      visible: page.bwork.style === "glass" && page.bwork.mode === "sparkle"
+      title: "Spark length"
+      subtitle: "How long each spark glows before it fades"
+      from: 0.15; to: 2; stepSize: 0.05
+      value: page.bwork.sparkHold
+      valueText: current.toFixed(2) + " s"
+      onCommitted: function(val) { page.bset("sparkHold", val) }
+    }
+    CcChoiceRow {
       visible: page.bwork.style === "glass" && page.bwork.mode !== "still"
       title: page.bwork.mode === "sparkle" ? "Spark colour" : "Glint colour from"
       subtitle: page.bwork.palette ? "Wallpaper: a bright take on the wallpaper's own colour" : "The wallpaper's colour isn't available (a video?)"
