@@ -16,11 +16,41 @@ gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
 
-def main():
+def from_reminder_file(path):
+    """A reminder set by tools/reminder.py: its message file, in this
+    account's runtime folder. Read, then removed (Omarchy's list stops
+    showing it), and the bar indicator refreshed."""
+    folder = os.path.join(os.environ.get("XDG_RUNTIME_DIR", ""), "omarchy-reminders")
+    if not folder or os.path.dirname(os.path.realpath(path)) != os.path.realpath(folder):
+        return None
     try:
-        r = json.loads(os.environ.pop("CC_REMINDER", "{}"))
-    except ValueError:
-        return 1
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd) as f:
+            text = f.read(1000).strip()
+        os.unlink(path)
+    except OSError:
+        return None
+    import subprocess
+    try:
+        title = subprocess.run(["omarchy-i18n", "reminder.title"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        title = ""
+    subprocess.run(["omarchy-shell", "-q", "omarchy.indicators", "refresh"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return {"title": title or "Reminder", "body": text, "join": "", "app": "Reminders"}
+
+
+def main():
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == "--reminder-file":
+        r = from_reminder_file(sys.argv[2])
+        if r is None:
+            return 1
+    else:
+        try:
+            r = json.loads(os.environ.pop("CC_REMINDER", "{}"))
+        except ValueError:
+            return 1
     title = str(r.get("title", ""))[:300]
     body = str(r.get("body", ""))[:1000]
     join = str(r.get("join", ""))
@@ -32,7 +62,9 @@ def main():
     hints = {"urgency": GLib.Variant("y", 1)}
     reply = bus.call_sync("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
                           "org.freedesktop.Notifications", "Notify",
-                          GLib.Variant("(susssasa{sv}i)", ("Calendar", 0, "x-office-calendar", title, body, actions, hints, 10000)),
+                          GLib.Variant("(susssasa{sv}i)", (str(r.get("app", "Calendar")), 0,
+                                       "x-office-calendar" if r.get("app", "Calendar") == "Calendar" else "alarm-symbolic",
+                                       title, body, actions, hints, 10000)),
                           GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None)
     nid = reply.unpack()[0]
     if not join:
