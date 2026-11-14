@@ -22,6 +22,8 @@ Item {
   property var glass: null
   // Glass border (GlassSpec.BORDER_DEFAULTS shape), or null for the config's own.
   property var border: null
+  // Per-app window opacity { "<class>": [active, inactive] } (GlassSpec.cleanApps).
+  property var apps: ({})
   property bool loaded: false
   property string lastError: ""
 
@@ -67,7 +69,7 @@ Item {
   // hyprland.lua only loads control-center.lua after the user agrees to it
   // (installInclude). Until then changes are live for this session only.
   property bool includeInstalled: false
-  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0 || !!glass || !!border
+  readonly property bool hasChanges: Object.keys(overrides).length > 0 || Object.keys(monitors).length > 0 || !!glass || !!border || Object.keys(apps).length > 0
   readonly property bool sessionOnly: hasChanges && !includeInstalled
 
   function checkInclude() {
@@ -137,12 +139,44 @@ Item {
     persistTimer.restart()
   }
 
+  // A see-through level for one app: a rule for its new windows, and the
+  // opacity set straight on the ones already open (a rule alone only reaches
+  // new windows). null removes it; Hyprland reloads so the rule goes too.
+  function setApp(cls, active, inactive) {
+    var one = {}; one[cls] = [active, inactive]
+    var c = Glass.cleanApps(one)[cls]
+    if (!c) return
+    var next = {}
+    for (var k in apps) next[k] = apps[k]
+    next[cls] = c
+    apps = next
+    runner.run(["hyprctl", "eval", Glass.appRuleLua(cls, c[0], c[1])], null)
+    applyAppNow(cls, c[0])
+    persistTimer.restart()
+  }
+  function removeApp(cls) {
+    if (!apps[cls]) return
+    var next = {}
+    for (var k in apps) if (k !== cls) next[k] = apps[k]
+    apps = next
+    applyAppNow(cls, 1)
+    persistTimer.restart()
+    reloadSoon.restart()
+  }
+  function applyAppNow(cls, value) {
+    runner.sh('for a in $(hyprctl clients -j | jq -r --arg c "$1" \'.[] | select(.class == $c) | .address\'); do '
+      + 'case "$a" in 0x[0-9a-fA-F]*) hyprctl dispatch "hl.dsp.window.set_prop({ window = \\"address:$a\\", prop = \\"opacity\\", value = \\"$2\\" })" >/dev/null ;; esac; done',
+      [cls, String(Number(value))], null)
+  }
+  Timer { id: reloadSoon; interval: 1200; onTriggered: root.runner.run(["hyprctl", "reload"], null) }
+
   function resetAll() {
     overrides = ({})
     monitors = ({})
     glass = null
     border = null
-    stateFile.setText("{\"options\": {}, \"monitors\": {}, \"glass\": null, \"border\": null}\n")
+    apps = ({})
+    stateFile.setText("{\"options\": {}, \"monitors\": {}, \"glass\": null, \"border\": null, \"apps\": {}}\n")
     luaFile.setText("-- Control Center: no window settings overridden.\n")
     runner.run(["hyprctl", "reload"], function() { refreshLater.restart() })
   }
@@ -151,10 +185,11 @@ Item {
     id: persistTimer
     interval: 600
     onTriggered: {
-      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors, glass: root.glass, border: root.border }, null, 2) + "\n")
+      stateFile.setText(JSON.stringify({ options: root.overrides, monitors: root.monitors, glass: root.glass, border: root.border, apps: root.apps }, null, 2) + "\n")
       luaFile.setText(Spec.overridesFile(root.overrides, root.monitors)
         + (root.glass ? "\n-- Glass look (hyprglass), from the Glass page\n" + Glass.savedLua(root.glass) : "")
-        + (root.border ? "\n-- Glass border, from the Glass page (rim follows the wallpaper: " + (root.border.followWallpaper ? "yes" : "no") + ")\n" + Glass.borderLua(root.border) : ""))
+        + (root.border ? "\n-- Glass border, from the Glass page (rim follows the wallpaper: " + (root.border.followWallpaper ? "yes" : "no") + ")\n" + Glass.borderLua(root.border) : "")
+        + (Object.keys(root.apps).length ? "\n-- See-through apps, from the Glass page\n" + Glass.appsLua(root.apps) : ""))
     }
   }
 
@@ -191,6 +226,7 @@ Item {
           root.glass = g
         } else root.glass = null
         root.border = o.border && typeof o.border === "object" ? Glass.cleanBorder(o.border) : null
+        root.apps = Glass.cleanApps(o.apps)
       } catch (e) { root.overrides = ({}) }
     }
   }

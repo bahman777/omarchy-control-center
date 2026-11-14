@@ -4,12 +4,31 @@
 // label, plain-language help, range and the plugin's own default. Types:
 // "float", "int", "color" (0xRRGGBBAA, alpha = strength) and "bool".
 var GROUPS = [
-  { id: "glass", title: "Glass", subtitle: "The body of the glass behind each window" },
-  { id: "edge", title: "Edge & lens", subtitle: "How the rim bends and catches light" },
-  { id: "bevel", title: "Bevel & light", subtitle: "The lit line along the edge and where light comes from" },
-  { id: "color", title: "Colour", subtitle: "How what's behind the glass is toned" },
-  { id: "more", title: "More", subtitle: "Frost, grain and special effects" }
+  { id: "glass", title: "Glass", subtitle: "The body of the glass behind each window",
+    where: "Shows wherever the window is see-through: the clearest of all." },
+  { id: "edge", title: "Edge & lens", subtitle: "How the rim bends and catches light",
+    where: "Bends what's behind the window, so it needs detail there: drag the window partly over another one. Lens bulge and Edge width shape the dome." },
+  { id: "bevel", title: "Bevel & light", subtitle: "The lit line along the edge and where light comes from",
+    where: "Only in a thin band right at the window's edge, under the border." },
+  { id: "color", title: "Colour", subtitle: "How what's behind the glass is toned",
+    where: "Everywhere behind the window; easy to see." },
+  { id: "more", title: "More", subtitle: "Frost, grain and special effects",
+    where: "Frost shows where windows overlap; grain everywhere." }
 ]
+
+// Starting points of our own, alongside your presets.
+var LOOKS = [
+  { name: "Dome", help: "A rounded, magnifying dome: wide soft edge, strong centre bulge, top shine",
+    values: { glass_opacity: 1, blur_strength: 1.4, edge_thickness_px: 70, edge_height: 0, refraction_strength: 0.9,
+              refraction_flow: 0, refraction_spread: 1, lens_distortion: 1, chromatic_aberration: 0.35,
+              fresnel_strength: 0.7, fresnel_reflection: 0, specular_strength: 1, specular_angle: 0,
+              bevel_strength: 0.5, bevel_size: 2, bevel_shadow: 0.4 } },
+  { name: "Clear lens", help: "Flat clear centre with a crisp lens rim",
+    values: { glass_opacity: 1, blur_strength: 0.8, edge_thickness_px: 18, edge_height: 40, refraction_strength: 1,
+              refraction_spread: 0.2, lens_distortion: 0.1, chromatic_aberration: 0.5, fresnel_strength: 0.9,
+              fresnel_reflection: 0.5, specular_strength: 0.9, bevel_strength: 0.8, bevel_size: 2.5, bevel_shadow: 0.5 } }
+]
+function look(name) { for (var i = 0; i < LOOKS.length; i++) if (LOOKS[i].name === name) return LOOKS[i]; return null }
 
 var SETTINGS = [
   { key: "glass_opacity", group: "glass", label: "Glass opacity", help: "How much of the glass effect shows", type: "float", min: 0, max: 1, def: 1.0 },
@@ -124,6 +143,9 @@ function savedLua(values) {
 // can take its tint from the wallpaper's colours (see tools/wallpaper-palette.py).
 var BORDER_DEFAULTS = {
   style: "glass",          // "glass" or "own" (leave the config's border alone)
+  mode: "travel",          // "travel" (light circles), "sparkle" (random sparks), "still"
+  sparkRate: 20,           // sparkle: sparks per minute, on average
+  sparkColor: "white",     // "white" or "wallpaper" (the glint takes the wallpaper's accent)
   width: 6,                // px
   followWallpaper: true,
   wallpaperMix: 0.55,      // 0 white rim .. 1 the wallpaper's colour
@@ -140,6 +162,8 @@ function cleanBorder(b) {
   b = b || {}
   var d = BORDER_DEFAULTS, o = {}
   o.style = b.style === "own" ? "own" : "glass"
+  o.mode = b.mode === "sparkle" || b.mode === "still" ? b.mode : "travel"
+  o.sparkColor = b.sparkColor === "wallpaper" ? "wallpaper" : "white"
   function num(v, lo, hi, def) { var x = Number(v); return isFinite(x) ? Math.max(lo, Math.min(hi, x)) : def }
   function rgb(v, def) { var x = typeof v === "string" ? parseInt(v.replace(/^#|^0x/i, ""), 16) : Number(v); return isFinite(x) && x >= 0 && x <= 0xFFFFFF ? Math.floor(x) : def }
   o.width = Math.round(num(b.width, 1, 12, d.width))
@@ -151,6 +175,7 @@ function cleanBorder(b) {
   o.glintColor = rgb(b.glintColor, d.glintColor)
   o.glintLength = b.glintLength === "long" ? "long" : "short"
   o.seconds = num(b.seconds, 2, 60, d.seconds)
+  o.sparkRate = Math.round(num(b.sparkRate, 2, 120, d.sparkRate))
   var p = b.palette
   o.palette = p && /^[0-9a-f]{6}$/i.test(String(p.accent)) ? { accent: String(p.accent).toLowerCase(), base: /^[0-9a-f]{6}$/i.test(String(p.base)) ? String(p.base).toLowerCase() : String(p.accent).toLowerCase(), path: String(p.path || "") } : null
   return o
@@ -173,13 +198,44 @@ function rimTones(b) {
   return [c, mixHex(c, "ffffff", 0.35)]
 }
 
+// The glint's colour: its own, or a bright take on the wallpaper's accent.
+function glintHex(b) {
+  b = cleanBorder(b)
+  if (b.sparkColor === "wallpaper" && b.palette) return mixHex("ffffff", b.palette.accent, 0.6)
+  return rgbHex(b.glintColor)
+}
+
+function rimStops(b) {
+  var t = rimTones(b), a = alphaHex(b.rimStrength), a2 = alphaHex(Math.min(1, b.rimStrength * 1.5))
+  var r1 = "rgba(" + t[0] + a + ")", r2 = "rgba(" + t[1] + a2 + ")"
+  return [r1, r2, r1, r1, r2, r1, r2, r1]
+}
+
 function borderColors(b) {
   b = cleanBorder(b)
   var t = rimTones(b), a = alphaHex(b.rimStrength), a2 = alphaHex(Math.min(1, b.rimStrength * 1.5))
   var r1 = "rgba(" + t[0] + a + ")", r2 = "rgba(" + t[1] + a2 + ")"
-  var g = "rgba(" + rgbHex(b.glintColor) + alphaHex(b.glint) + ")"
-  var e = "rgba(" + mixHex(rgbHex(b.glintColor), t[0], 0.5) + alphaHex(b.glint * 0.6) + ")"
+  var gh = glintHex(b)
+  var g = "rgba(" + gh + alphaHex(b.glint) + ")"
+  var e = "rgba(" + mixHex(gh, t[0], 0.5) + alphaHex(b.glint * 0.6) + ")"
+  if (b.mode !== "travel") return rimStops(b)
   return b.glintLength === "long" ? [r1, r2, e, g, g, e, r2, r1] : [r1, r2, r1, g, e, r1, r2, r1]
+}
+
+// Sparkle: the rim with one spark at stop `pos` (0-7), and its soft halo.
+function sparkColors(b, pos) {
+  b = cleanBorder(b)
+  var stops = rimStops(b), gh = glintHex(b), t = rimTones(b)
+  var e = "rgba(" + mixHex(gh, t[0], 0.4) + alphaHex(b.glint * 0.55) + ")"
+  pos = Math.max(0, Math.min(7, pos))
+  stops[pos] = "rgba(" + gh + alphaHex(b.glint) + ")"
+  if (pos > 0) stops[pos - 1] = e
+  if (pos < 7) stops[pos + 1] = e
+  return stops
+}
+function colorsLua(colors, angle) {
+  return "hl.config({ general = { col = { active_border = { colors = { "
+    + colors.map(function(c) { return "\"" + c + "\"" }).join(", ") + " }, angle = " + Math.round(angle) + " } } } })"
 }
 
 function inactiveColor(b) {
@@ -193,5 +249,32 @@ function borderLua(b) {
   return "hl.config({ general = { border_size = " + b.width + ", col = { active_border = { colors = { "
     + borderColors(b).map(function(c) { return "\"" + c + "\"" }).join(", ")
     + " }, angle = 45 }, inactive_border = \"" + inactiveColor(b) + "\" } } })\n"
-    + "hl.animation({ leaf = \"borderangle\", enabled = true, speed = " + Math.round(b.seconds * 10) + ", bezier = \"linear\", style = \"loop\" })\n"
+    + (b.mode === "travel"
+      ? "hl.animation({ leaf = \"borderangle\", enabled = true, speed = " + Math.round(b.seconds * 10) + ", bezier = \"linear\", style = \"loop\" })\n"
+      : "hl.animation({ leaf = \"borderangle\", enabled = false })\n")
+}
+
+// ------------------------------------------------------------ see-through apps
+// Per-app window opacity: { "<class>": [active, inactive] }. For apps with no
+// transparency of their own (Dolphin), so the rest can stay fully opaque.
+function cleanApps(map) {
+  var out = {}
+  for (var k in (map || {})) {
+    if (!/^[A-Za-z0-9._-]{1,80}$/.test(k)) continue
+    var v = map[k] || []
+    var a = Number(v[0]), i = Number(v[1])
+    if (!(a >= 0.3 && a <= 1)) continue
+    if (!(i >= 0.3 && i <= 1)) i = a
+    out[k] = [Math.round(a * 100) / 100, Math.round(i * 100) / 100]
+  }
+  return out
+}
+function appRuleLua(cls, a, i) {
+  return "hl.window_rule({ match = { class = \"^(" + cls.replace(/\./g, "\\\\.") + ")$\" }, opacity = \"" + a + " " + i + "\" })"
+}
+function appsLua(map) {
+  map = cleanApps(map)
+  var out = []
+  for (var k in map) out.push(appRuleLua(k, map[k][0], map[k][1]))
+  return out.length ? out.join("\n") + "\n" : ""
 }

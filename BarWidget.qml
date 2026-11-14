@@ -13,6 +13,7 @@ import qs.Commons
 import qs.Ui
 import "quick"
 import "Icons.js" as Icons
+import "GlassSpec.js" as Glass
 
 // GNOME-style status cluster in the bar (network · Bluetooth · volume ·
 // battery). Clicking it drops the Quick Settings panel from the bar, like the
@@ -149,10 +150,40 @@ Panel {
   }
   Timer { id: borderReapply; interval: 300; onTriggered: if (root.hypr.border) root.hypr.previewBorder(root.hypr.border) }
 
+  // Sparkle: now and then a spark lights up somewhere on the rim and fades,
+  // as if light caught the glass. Hyprland fades border colour changes, so
+  // switching one stop bright and back gives the glow. The Glass page sets
+  // borderPreview while you tune, so the unsaved look sparkles too.
+  property var borderPreview: null
+  readonly property var liveBorder: borderPreview || hypr.border
+  readonly property bool sparkling: !!liveBorder && liveBorder.style === "glass" && liveBorder.mode === "sparkle"
+  property int sparkAngle: 45
+  function sparkNext() {
+    var mean = 60000 / Math.max(2, Number(liveBorder ? liveBorder.sparkRate : 20) || 20)
+    sparkTimer.interval = Math.max(250, Math.round(mean * (0.25 + Math.random() * 1.5)))
+    sparkTimer.restart()
+  }
+  function spark() {
+    var b = Glass.cleanBorder(liveBorder)
+    sparkAngle = Math.floor(Math.random() * 360)
+    runner.run(["hyprctl", "eval", Glass.colorsLua(Glass.sparkColors(b, Math.floor(Math.random() * 8)), sparkAngle)], null)
+    sparkOff.restart()
+  }
+  Timer { id: sparkTimer; repeat: false; onTriggered: { if (root.sparkling) { root.spark(); root.sparkNext() } } }
+  Timer {
+    id: sparkOff
+    interval: 260
+    onTriggered: if (root.liveBorder) root.runner.run(["hyprctl", "eval", Glass.colorsLua(Glass.rimStops(Glass.cleanBorder(root.liveBorder)), root.sparkAngle)], null)
+  }
+  onSparklingChanged: if (sparkling) sparkNext(); else sparkTimer.stop()
+
   // Reminders made by an earlier version kept their text in Omarchy's folder,
   // which Omarchy's own indicator lists through argv: move it into ours as
   // soon as the plugin loads (tools/reminder.py migrate).
-  Component.onCompleted: runner.run(["python3", "-I", pluginDir + "/tools/reminder.py", "migrate"], null)
+  Component.onCompleted: {
+    runner.run(["python3", "-I", pluginDir + "/tools/reminder.py", "migrate"], null)
+    if (sparkling) sparkNext()
+  }
 
   // hyprglass loaded? (shows the Glass settings page)
   property bool hasHyprglass: false
