@@ -20,10 +20,21 @@ def from_reminder_file(path):
     """A reminder set by tools/reminder.py: its message file, in this
     plugin's private runtime folder. Read, then removed (Omarchy's list stops
     showing it), and the bar indicator refreshed."""
+    import re
+    given = path
     runtime = os.environ.get("XDG_RUNTIME_DIR", "")
     folder = os.path.join(runtime, "control-center", "reminders")
-    if not runtime or os.path.dirname(os.path.realpath(path)) != os.path.realpath(folder):
+    legacy = os.path.join(runtime, "omarchy-reminders")
+    name = os.path.basename(path)
+    if not runtime or not re.match(r"^omarchy-reminder-\d+m-\d+\.message$", name):
         return None
+    # Ours, looked up by name: a reminder made by an earlier version points at
+    # Omarchy's folder, and its text may have been moved here since.
+    path = os.path.join(folder, name)
+    if not os.path.exists(path):
+        if os.path.dirname(os.path.realpath(given)) != os.path.realpath(legacy):
+            return None
+        path = os.path.join(legacy, name)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd) as f:

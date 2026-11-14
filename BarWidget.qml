@@ -149,6 +149,11 @@ Panel {
   }
   Timer { id: borderReapply; interval: 300; onTriggered: if (root.hypr.border) root.hypr.previewBorder(root.hypr.border) }
 
+  // Reminders made by an earlier version kept their text in Omarchy's folder,
+  // which Omarchy's own indicator lists through argv: move it into ours as
+  // soon as the plugin loads (tools/reminder.py migrate).
+  Component.onCompleted: runner.run(["python3", "-I", pluginDir + "/tools/reminder.py", "migrate"], null)
+
   // hyprglass loaded? (shows the Glass settings page)
   property bool hasHyprglass: false
   Timer {
