@@ -107,6 +107,10 @@ Panel {
   }
   // Audio output switch used by the Sound menu and page (see tools/audio-output.sh).
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, "")
+  // Reminders made by an earlier version kept their text in Omarchy's folder,
+  // which Omarchy's own indicator lists through argv: move it into ours as
+  // soon as the plugin loads (tools/reminder.py migrate).
+  Component.onCompleted: runner.run(["python3", "-I", pluginDir + "/tools/reminder.py", "migrate"], null)
   function setAudioOutput(id, name) { runner.run(["bash", pluginDir + "/tools/audio-output.sh", String(id), String(name)], null) }
 
   // The Now Playing card stays for 30 s after the music pauses or stops, then
