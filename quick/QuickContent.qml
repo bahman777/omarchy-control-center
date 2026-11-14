@@ -507,7 +507,9 @@ Item {
     refreshKbd()
     refreshFirewall()
     qc.runner.run(["omarchy-capture-screenrecording", "--status"], function(code) { q.recording = code === 0 })
-    qc.runner.run(["omarchy-reminder", "show", "-j"], function(code, out) {
+    // Our own lister: `omarchy-reminder show -j` passes reminder text to jq
+    // as arguments, visible to other local accounts.
+    qc.runner.run(["python3", "-I", reminderTool, "list"], function(code, out) {
       try { q.reminders = (JSON.parse(out).reminders || []).slice(0, 20) } catch (e) { q.reminders = [] }
     })
     qc.runner.run(["bash", "-c", "omarchy-sudo-passwordless --active"], function(code) { q.sudoFree = code === 0 })
