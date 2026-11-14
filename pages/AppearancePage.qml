@@ -13,6 +13,12 @@ CcPage {
   property var themes: []
   property string font: ""
   property var fonts: []
+  property int hiddenFonts: 0
+  // omarchy-font-set writes the family name into sed programs unescaped, so
+  // only names made of plain characters are offered or passed to it: a font
+  // whose name carries sed syntax (/, &, \, quotes, newlines…) could
+  // otherwise run commands as you.
+  function safeFont(name) { return /^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,79}$/.test(String(name)) }
   property string corners: ""
   property bool applying: false
 
@@ -29,7 +35,9 @@ CcPage {
       page.themes = String(out).split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s !== "" }).slice(0, 2000)
     })
     cc.runner.run(["omarchy-font-list"], function(code, out) {
-      page.fonts = String(out).split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s !== "" }).slice(0, 500)
+      var all = String(out).split("\n").map(function(s) { return s.trim() }).filter(function(s) { return s !== "" })
+      page.fonts = all.filter(page.safeFont).slice(0, 500)
+      page.hiddenFonts = all.length - all.filter(page.safeFont).length
     })
   }
 
@@ -84,7 +92,7 @@ CcPage {
     CcRow {
       icon: Icons.formatFont
       title: "Monospace font"
-      subtitle: "Used by terminals, the bar and the shell"
+      subtitle: "Used by terminals, the bar and the shell" + (page.hiddenFonts ? " · " + page.hiddenFonts + " font(s) with unusual names are hidden" : "")
       SearchableDropdown {
         width: Style.space(260)
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
@@ -92,7 +100,7 @@ CcPage {
         value: page.font
         foreground: page.cc.fg
         onChanged: function(v) {
-          if (v && v !== page.font) page.cc.runner.run(["omarchy-font-set", v], function() { page.refresh() })
+          if (v && v !== page.font && page.safeFont(v)) page.cc.runner.run(["omarchy-font-set", v], function() { page.refresh() })
         }
       }
     }

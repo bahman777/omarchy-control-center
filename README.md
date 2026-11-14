@@ -68,7 +68,7 @@ omarchy-shell control-center settings displays # open on a settings page (or 'in
 - **Sound output switching** moves everything that's playing to the new device, including players that don't announce an app name (Mopidy, for one). When another device is still playing besides the one you selected, for example your laptop speakers as part of a Snapcast group, an extra "Also playing on…" slider appears for it.
 - **Battery charge limit** (laptops that support it): the chip shows your limit, such as "Limit 80%". Click it to charge to 100% before a trip, then click again to go back. It uses `asusctl` on ASUS laptops (no password), otherwise the standard `charge_control_end_threshold` setting through a password prompt.
 - **Keyboard backlight** works with any `*kbd_backlight*` device, through `brightnessctl`.
-- **Night Light**: on/off, a schedule (sunset to sunrise, custom hours, or none), warmth and brightness. Sunset times come from a `lat lon` file at `~/tmp/latlon.txt` or `/tmp/latlon.txt` if you have one, otherwise from your time zone.
+- **Night Light**: on/off, a schedule (sunset to sunrise, custom hours, or none), warmth and brightness. Sunset times come from a `lat lon` file at `~/.local/state/omarchy/control-center/location.txt` (or `~/tmp/latlon.txt`) if you have one, otherwise from your time zone.
 - **Battery alerts** for the laptop (20%, 10%, 5%) and every other device: Bluetooth headsets and mice, phones, and Logitech devices through Solaar (15%, 5%).
 - **Calendars** are iCal links (for Google: Calendar settings → your calendar → Integrate calendar → "Secret address in iCal format"), stored privately (mode 600) and cached so events show offline.
 
