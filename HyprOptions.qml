@@ -71,10 +71,19 @@ Item {
     })
   }
 
+  // Adds the one line that loads control-center.lua at login. The Lua line
+  // goes in as an argument ($2), never spliced into the shell script, so its
+  // quotes survive. Afterwards Hyprland reloads; if it reports any config
+  // error, hyprland.lua is put back from the backup made just before.
+  readonly property string includeLine: 'pcall(dofile, os.getenv("HOME") .. "/.config/hypr/control-center.lua")'
   function installInclude() {
-    runner.sh('f="$HOME/.config/hypr/hyprland.lua"; [ -f "$f" ] || exit 1; grep -q "control-center.lua" "$f" && exit 0; '
-      + 'cp "$f" "$f.bak.control-center" && '
-      + 'printf "\n-- Added by the Control Center plugin: settings changed in its window.\npcall(dofile, os.getenv(\"HOME\") .. \"/.config/hypr/control-center.lua\")\n" >> "$f"', [], function() {
+    runner.sh('f="$1"; line="$2"; [ -f "$f" ] || exit 1; grep -qF "control-center.lua" "$f" && exit 0; '
+      + 'cp -- "$f" "$f.bak.control-center" || exit 1; '
+      + 'printf "\n-- Added by the Control Center plugin: settings changed in its window.\n%s\n" "$line" >> "$f"; '
+      + 'hyprctl reload >/dev/null 2>&1; sleep 1; '
+      + 'if [ -n "$(hyprctl configerrors 2>/dev/null | tr -d "[:space:]")" ]; then cp -- "$f.bak.control-center" "$f"; hyprctl reload >/dev/null 2>&1; exit 3; fi',
+      [home + "/.config/hypr/hyprland.lua", includeLine], function(code) {
+        if (code === 3) root.lastError = "Hyprland reported a config error, so hyprland.lua was restored from the backup"
         root.checkInclude()
       })
   }
