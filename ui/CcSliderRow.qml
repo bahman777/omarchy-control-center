@@ -48,6 +48,7 @@ CcRow {
       tickColor: Color.menu.background
       onMoved: function(v) { root.moved(v) }
       onReleased: function(v) { root.committed(v) }
+      WheelScroll {}
     }
   }
   CcText {

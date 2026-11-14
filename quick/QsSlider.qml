@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "../ui"
 
 // [icon button] ———slider——— [chevron]   (GNOME quick settings slider row)
 Item {
@@ -61,6 +62,7 @@ Item {
     knobSize: Style.space(20)
     onMoved: function(v) { row.moved(v) }
     onReleased: function(v) { row.committed(v) }
+    WheelScroll {}
 
     readonly property color fillTint: row.muted ? Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, 0.4) : Color.accent
     readonly property real grooveX: knobSize / 2

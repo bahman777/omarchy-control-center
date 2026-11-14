@@ -577,8 +577,16 @@ Panel {
       Keys.onPressed: function(event) {
         var fi = keyRoot.Window.activeFocusItem
         if (fi && fi !== keyRoot) {
-          if (event.key === Qt.Key_Escape && fi.popupOpen !== true) { keyRoot.forceActiveFocus(); event.accepted = true }
-          return
+          // Only a text field (it has a cursor) or an open dropdown keeps
+          // the keys. Anything else that took focus from a mouse click (a
+          // button, the scroll bar, a closed dropdown) hands them back, so
+          // hjkl and the arrows keep working after using the mouse.
+          var typing = fi.popupOpen === true || (fi.cursorPosition !== undefined && fi.readOnly !== true)
+          if (typing) {
+            if (event.key === Qt.Key_Escape && fi.popupOpen !== true) { keyRoot.forceActiveFocus(); event.accepted = true }
+            return
+          }
+          keyRoot.forceActiveFocus()
         }
         var k = event.key, t = event.text
         if (k === Qt.Key_Escape) quick.stepBack()
