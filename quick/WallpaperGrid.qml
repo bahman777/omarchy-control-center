@@ -65,7 +65,9 @@ Column {
           anchors.fill: parent
           anchors.margins: tile.isCurrent ? 3 : 0
           visible: !tile.modelData.video
-          source: tile.modelData.video ? "" : "file://" + tile.modelData.path
+          // Each path segment escaped: a name like "th?id=…jpg" (Bing) would
+          // otherwise be cut at the "?" and load nothing.
+          source: tile.modelData.video ? "" : "file://" + tile.modelData.path.split("/").map(encodeURIComponent).join("/")
           sourceSize.width: 320
           sourceSize.height: 200
           fillMode: Image.PreserveAspectCrop

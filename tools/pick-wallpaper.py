@@ -78,6 +78,11 @@ def main():
         os.makedirs(folder, exist_ok=True)
         if os.path.realpath(os.path.dirname(src)) != os.path.realpath(folder):
             base, ext = os.path.splitext(os.path.basename(src))
+            # A clean name for the copy: "th?id=OHR.Lake_1920x1080.jpg" (Bing)
+            # trips up tools that treat the name as a URL.
+            import re
+            base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._") or "wallpaper"
+            ext = ext.lower()
             dest = os.path.join(folder, base + ext)
             n = 2
             while os.path.exists(dest) and not os.path.samefile(dest, src):
