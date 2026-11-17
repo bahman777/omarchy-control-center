@@ -1483,7 +1483,9 @@ Item {
       title: "Wallpaper"
       WallpaperGrid { runner: q.qc.runner }
       QsMenuItem { icon: Icons.refresh; text: "Next Wallpaper"; separatorAbove: true; onClicked: q.qc.runner.run(["omarchy-theme-bg-next"], null) }
-      QsMenuItem { icon: Icons.image; text: "Add Your Own…"; detail: "Opens this theme's wallpaper folder"; onClicked: q.qc.launch(["omarchy-theme-bg-install"], 150) }
+      QsMenuItem { icon: Icons.image; text: "Choose a Picture…"; detail: "Pick a file; it's added to this theme's wallpapers and set"
+        onClicked: q.qc.launch(["python3", "-I", Qt.resolvedUrl("../tools/pick-wallpaper.py").toString().replace(/^file:\/\//, "").replace(/\?.*$/, "")], 150) }
+      QsMenuItem { text: "Open Wallpaper Folder"; detail: "To add or remove files yourself"; onClicked: q.qc.launch(["omarchy-theme-bg-install"], 150) }
       QsMenuItem { text: "Appearance Settings"; onClicked: q.openPage("appearance") }
     }
   }

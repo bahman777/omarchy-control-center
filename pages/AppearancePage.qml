@@ -84,7 +84,9 @@ CcPage {
       title: "Background"
       subtitle: "The current theme's backgrounds and your own"
       CcButton { text: "Next"; onClicked: page.cc.runner.run(["omarchy-theme-bg-next"], function() { bgGrid.refresh() }) }
-      CcButton { text: "Add your own…"; tooltipText: "Opens this theme's wallpaper folder"; onClicked: page.cc.launch(["omarchy-theme-bg-install"]) }
+      CcButton { text: "Choose a picture…"; tooltipText: "Pick a picture or video with the file dialog: it's copied into this theme's wallpapers and set"
+        onClicked: page.cc.launch(["python3", "-I", Qt.resolvedUrl("../tools/pick-wallpaper.py").toString().replace(/^file:\/\//, "").replace(/\?.*$/, "")]) }
+      CcButton { text: "Open folder"; tooltipText: "This theme's wallpaper folder, to add or remove files yourself"; onClicked: page.cc.launch(["omarchy-theme-bg-install"]) }
     }
     Item {
       width: parent ? parent.width : 0
