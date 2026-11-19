@@ -494,6 +494,19 @@ Scope {
     return list
   }
   readonly property int count: rows.length
+  // A row by id, for lists that keep their delegates by id (so a reply being
+  // typed survives other notifications coming and going); a blank row while
+  // the list catches up after one is removed.
+  function rowFor(id) {
+    for (var i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i]
+    return { id: id, appName: "", appIcon: "", image: "", summary: "", body: "", urgency: 1,
+             actions: [], hasDefault: false, hasReply: false, replyPlaceholder: "", time: 0 }
+  }
+  // Ids only, reassigned only when the set or order changes.
+  function keysOf(list, old) {
+    var k = list.map(function(r) { return r.id })
+    return (old && k.join("|") === old.join("|")) ? old : k
+  }
   readonly property var popupRows: rows.filter(function(r) { return svc.popupIds.indexOf(r.id) >= 0 })
 
   // Drop popups whose notification went away, and time the rest out.

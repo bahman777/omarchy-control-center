@@ -1158,10 +1158,12 @@ Item {
       }
 
       Repeater {
-        model: q.notifActive ? q.notif.rows.slice(0, q.notifShown) : []
+        // Ids, not the rows: the rows array is rebuilt on every change, which
+        // would recreate the cards and wipe a reply being typed.
+        model: q.notifKeys
         delegate: NotifCard {
           required property var modelData
-          row: modelData
+          row: q.notif.rowFor(modelData)
           svc: q.notif
           compact: true
           width: parent ? parent.width : 0
@@ -1210,6 +1212,12 @@ Item {
   // Cards shown in the panel: two, or one while the music card takes room;
   // the rest are behind "Show All".
   readonly property int notifShown: qc.showNowPlaying ? 1 : 2
+  property var notifKeys: []
+  function syncNotifKeys() { notifKeys = notifActive ? notif.keysOf(notif.rows.slice(0, notifShown), notifKeys) : [] }
+  onNotifShownChanged: syncNotifKeys()
+  onNotifActiveChanged: syncNotifKeys()
+  Connections { target: q.notif; ignoreUnknownSignals: true; function onRowsChanged() { q.syncNotifKeys() } }
+  Timer { interval: 0; running: true; onTriggered: q.syncNotifKeys() }
 
   // ================================================================ page view
   Column {
@@ -1346,32 +1354,45 @@ Item {
               var o = q.wifiObject(wr.modelData.ssid); if (o) o.connect()
             }
           }
-          Row {
-            visible: q.passwordFor === wr.modelData.ssid
-            height: visible ? implicitHeight + Style.space(8) : 0
-            leftPadding: Style.space(40)
-            spacing: Style.space(8)
-            TextField {
-              id: pw
-              width: Style.space(200)
-              password: true
-              placeholderText: "Password"
-              foreground: Color.menu.text
-              onVisibleChanged: if (visible) forceActiveFocus()
-              Keys.onReturnPressed: go.clicked()
-            }
-            Button {
-              id: go
-              text: "Connect"
-              bordered: true
-              foreground: Color.menu.text
-              fontSize: Style.font.bodySmall
-              onClicked: {
-                if (pw.text === "") return
-                var secret = pw.text, o = q.wifiObject(wr.modelData.ssid)
-                if (o) o.connectWithPsk(secret)
-                pw.text = ""; q.passwordFor = ""
-              }
+        }
+      }
+      // One password box, below the list and outside it: the list is rebuilt
+      // as signal strengths change, which used to wipe the typing.
+      Column {
+        visible: Networking.wifiEnabled && q.passwordFor !== ""
+        width: parent ? parent.width : 0
+        spacing: Style.space(6)
+        topPadding: Style.space(6)
+        Text {
+          leftPadding: Style.space(10)
+          text: "Password for " + q.passwordFor
+          color: Color.menu.text
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.bodySmall
+        }
+        Row {
+          leftPadding: Style.space(10)
+          spacing: Style.space(8)
+          TextField {
+            id: pw
+            width: Style.space(220)
+            password: true
+            placeholderText: "Password"
+            foreground: Color.menu.text
+            onVisibleChanged: if (visible) forceActiveFocus()
+            Keys.onReturnPressed: go.clicked()
+          }
+          Button {
+            id: go
+            text: "Connect"
+            bordered: true
+            foreground: Color.menu.text
+            fontSize: Style.font.bodySmall
+            onClicked: {
+              if (pw.text === "") return
+              var secret = pw.text, o = q.wifiObject(q.passwordFor)
+              if (o) o.connectWithPsk(secret)
+              pw.text = ""; q.passwordFor = ""
             }
           }
         }

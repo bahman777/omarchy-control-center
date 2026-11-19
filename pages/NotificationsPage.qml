@@ -60,15 +60,22 @@ CcPage {
       CcButton { visible: page.active && page.svc.count > 0; text: "Clear all"; onClicked: page.svc.clearAll() }
     ]
   }
+  property var keys: []
+  function syncKeys() { keys = (page.active && page.svc) ? page.svc.keysOf(page.svc.rows, keys) : [] }
+  onActiveChanged: syncKeys()
+  Connections { target: page.svc; ignoreUnknownSignals: true; function onRowsChanged() { page.syncKeys() } }
+  Timer { interval: 0; running: true; onTriggered: page.syncKeys() }
+
   Column {
     visible: page.active
     width: parent ? parent.width : 0
     spacing: Style.space(8)
     Repeater {
-      model: page.active ? page.svc.rows : []
+      // Ids, not the rows (see QuickContent): keeps a reply being typed.
+      model: page.keys
       delegate: NotifCard {
         required property var modelData
-        row: modelData
+        row: page.svc.rowFor(modelData)
         svc: page.svc
         width: parent ? parent.width : 0
       }

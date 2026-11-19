@@ -182,40 +182,36 @@ CcPage {
           }
         }
 
-        Item {
-          visible: page.passwordFor === netItem.modelData.ssid
-          width: parent.width
-          height: visible ? pwRow.implicitHeight + Style.spacing.xl * 2 : 0
-          Row {
-            id: pwRow
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: Style.space(48)
-            spacing: Style.spacing.lg
-            TextField {
-              id: pw
-              width: Style.space(260)
-              password: true
-              placeholderText: "Password"
-              foreground: page.cc.fg
-              onVisibleChanged: if (visible) forceActiveFocus()
-              Keys.onReturnPressed: connectBtn.clicked()
-            }
-            CcButton {
-              id: connectBtn
-              text: "Connect"
-              onClicked: {
-                if (pw.text.length === 0) return
-                var secret = pw.text
-                page.act(netItem.modelData.ssid, function(o) { o.connectWithPsk(secret) })
-                pw.text = ""
-                page.passwordFor = ""
-              }
-            }
-            CcButton { text: "Cancel"; onClicked: { pw.text = ""; page.passwordFor = "" } }
-          }
+      }
+    }
+
+    // One password box for the network you picked, outside the list: the
+    // list is rebuilt whenever it refreshes (signal strengths change every few
+    // seconds), which used to wipe what you were typing and take the focus.
+    CcRow {
+      visible: page.passwordFor !== ""
+      title: "Password for " + page.passwordFor
+      TextField {
+        id: pw
+        width: Style.space(240)
+        password: true
+        placeholderText: "Password"
+        foreground: page.cc.fg
+        onVisibleChanged: if (visible) forceActiveFocus()
+        Keys.onReturnPressed: connectBtn.clicked()
+      }
+      CcButton {
+        id: connectBtn
+        text: "Connect"
+        onClicked: {
+          if (pw.text.length === 0) return
+          var secret = pw.text, ssid = page.passwordFor
+          page.act(ssid, function(o) { o.connectWithPsk(secret) })
+          pw.text = ""
+          page.passwordFor = ""
         }
       }
+      CcButton { text: "Cancel"; onClicked: { pw.text = ""; page.passwordFor = "" } }
     }
   }
 

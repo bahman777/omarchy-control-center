@@ -25,6 +25,18 @@ CcPage {
   property real selectedDay: dayOf(cc.calendarDay > 0 ? cc.calendarDay : Date.now())
   property real monthStart: { var d = new Date(selectedDay); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime() }
   Component.onCompleted: cc.calendarDay = 0
+  property var calKeys: []
+  function calFor(id) {
+    var l = page.data.calendars || []
+    for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]
+    return { id: id, name: "", color: "#888888", enabled: true, host: "" }
+  }
+  function syncCalKeys() {
+    var k = (page.data.calendars || []).map(function(c) { return c.id })
+    if (k.join("|") !== calKeys.join("|")) calKeys = k
+  }
+  Connections { target: page.svc; ignoreUnknownSignals: true; function onCalDataChanged() { page.syncCalKeys() } }
+  Timer { interval: 0; running: true; onTriggered: page.syncCalKeys() }
 
   function shiftMonth(n) {
     var d = new Date(monthStart); d.setMonth(d.getMonth() + n)
@@ -193,19 +205,22 @@ CcPage {
     subtitle: "A reminder pops up 10 minutes before each meeting. Click the dot to change a colour."
     header: [ CcButton { text: page.svc && page.svc.calBusy ? "Updating…" : "Refresh"; onClicked: page.run(["events", "--refresh"], "Calendars updated") } ]
     Repeater {
-      model: page.data.calendars || []
+      // Ids, not the calendar objects: the list is rebuilt whenever events
+      // refresh, which would wipe a name being typed in Rename.
+      model: page.calKeys
       delegate: CcRow {
         id: calRow
-        required property var modelData
+        required property string modelData
+        readonly property var cal: page.calFor(modelData)
         icon: "●"
-        iconColor: modelData.color
-        dim: !modelData.enabled
-        title: modelData.name
-        subtitle: modelData.error ? "Couldn't update: " + modelData.error + " (showing saved copy)" : modelData.host
-        subtitleColor: modelData.error ? page.cc.urgent : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.62)
+        iconColor: cal.color
+        dim: !cal.enabled
+        title: cal.name
+        subtitle: cal.error ? "Couldn't update: " + cal.error + " (showing saved copy)" : cal.host
+        subtitleColor: cal.error ? page.cc.urgent : Qt.rgba(page.cc.fg.r, page.cc.fg.g, page.cc.fg.b, 0.62)
         clickable: true
         tip: "Change colour"
-        onClicked: page.run(["set", modelData.id, "color=" + page.nextColor(modelData.color)], "")
+        onClicked: page.run(["set", cal.id, "color=" + page.nextColor(cal.color)], "")
         TextField {
           width: Style.space(130)
           placeholderText: "Rename"
@@ -213,16 +228,16 @@ CcPage {
           property bool ccFocusable: visible
           property bool hasCursor: false
           function ccActivate() { forceActiveFocus() }
-          Keys.onReturnPressed: { if (text.trim()) page.run(["set", calRow.modelData.id, "name=" + text.trim()], "Renamed"); text = "" }
+          Keys.onReturnPressed: { if (text.trim()) page.run(["set", calRow.cal.id, "name=" + text.trim()], "Renamed"); text = "" }
         }
         CcButton {
-          text: calRow.modelData.enabled ? "Hide" : "Show"
-          tooltipText: calRow.modelData.enabled ? "Hide its events and reminders" : "Show its events again"
-          onClicked: page.run(["set", calRow.modelData.id, "enabled=" + (calRow.modelData.enabled ? "false" : "true")], "")
+          text: calRow.cal.enabled ? "Hide" : "Show"
+          tooltipText: calRow.cal.enabled ? "Hide its events and reminders" : "Show its events again"
+          onClicked: page.run(["set", calRow.cal.id, "enabled=" + (calRow.cal.enabled ? "false" : "true")], "")
         }
         CcButton {
           text: "Remove"
-          onClicked: page.run(["remove", calRow.modelData.id], "Calendar removed")
+          onClicked: page.run(["remove", calRow.cal.id], "Calendar removed")
         }
       }
     }
