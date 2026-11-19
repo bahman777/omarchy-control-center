@@ -55,6 +55,16 @@ Item {
     return Pages.filter(query).filter(function(p) { return !p.needs || (p.needs === "hyprglass" && q.qc.hasHyprglass) })
   }
 
+  // Password for a secured network, in the pop-up over the panel.
+  function askWifiPassword(ssid) {
+    qc.ask({ title: "Connect to " + ssid, subtitle: "Enter the Wi-Fi password", placeholder: "Password",
+             password: true, okText: "Connect" }, function(secret) {
+      var o = q.wifiObject(ssid)
+      if (o) { o.connectWithPsk(secret); q.qc.toast("Connecting to " + ssid + "…") }
+      else q.qc.toast(ssid + " is out of range")
+    })
+  }
+
   function toggleMenu(id) {
     navDir = expanded === id ? -1 : 1
     expanded = expanded === id ? "" : id
@@ -229,7 +239,6 @@ Item {
     for (var i = 0; i < wifiObjects.length; i++) if (wifiObjects[i] && wifiObjects[i].name === ssid) return wifiObjects[i]
     return null
   }
-  property string passwordFor: ""
   Binding { target: q.wifiDevice; property: "scannerEnabled"; value: true; when: q.wifiDevice !== null && q.expanded === "wifi" }
   Component.onDestruction: {
     if (wifiDevice) wifiDevice.scannerEnabled = false
@@ -1350,49 +1359,8 @@ Item {
             trailing: wr.modelData.secure && !wr.modelData.known ? Icons.lock : ""
             onClicked: {
               if (wr.modelData.connected) return
-              if (wr.modelData.secure && !wr.modelData.known) { q.passwordFor = q.passwordFor === wr.modelData.ssid ? "" : wr.modelData.ssid; return }
+              if (wr.modelData.secure && !wr.modelData.known) { q.askWifiPassword(wr.modelData.ssid); return }
               var o = q.wifiObject(wr.modelData.ssid); if (o) o.connect()
-            }
-          }
-        }
-      }
-      // One password box, below the list and outside it: the list is rebuilt
-      // as signal strengths change, which used to wipe the typing.
-      Column {
-        visible: Networking.wifiEnabled && q.passwordFor !== ""
-        width: parent ? parent.width : 0
-        spacing: Style.space(6)
-        topPadding: Style.space(6)
-        Text {
-          leftPadding: Style.space(10)
-          text: "Password for " + q.passwordFor
-          color: Color.menu.text
-          font.family: Style.font.menuFamily
-          font.pixelSize: Style.font.bodySmall
-        }
-        Row {
-          leftPadding: Style.space(10)
-          spacing: Style.space(8)
-          TextField {
-            id: pw
-            width: Style.space(220)
-            password: true
-            placeholderText: "Password"
-            foreground: Color.menu.text
-            onVisibleChanged: if (visible) forceActiveFocus()
-            Keys.onReturnPressed: go.clicked()
-          }
-          Button {
-            id: go
-            text: "Connect"
-            bordered: true
-            foreground: Color.menu.text
-            fontSize: Style.font.bodySmall
-            onClicked: {
-              if (pw.text === "") return
-              var secret = pw.text, o = q.wifiObject(q.passwordFor)
-              if (o) o.connectWithPsk(secret)
-              pw.text = ""; q.passwordFor = ""
             }
           }
         }

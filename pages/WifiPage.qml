@@ -43,7 +43,6 @@ CcPage {
     return null
   }
 
-  property string passwordFor: ""
   property var details: ({})
   property var band: ({})
 
@@ -66,7 +65,14 @@ CcPage {
   }
   function activate(n) {
     if (n.connected) return
-    if (needsPassword(n)) { passwordFor = (passwordFor === n.ssid ? "" : n.ssid); return }
+    if (needsPassword(n)) {
+      var ssid = n.ssid
+      cc.ask({ title: "Connect to " + ssid, subtitle: "Enter the Wi-Fi password", placeholder: "Password",
+               password: true, okText: "Connect" }, function(secret) {
+        page.act(ssid, function(o) { o.connectWithPsk(secret) })
+      })
+      return
+    }
     var obj = networkFor(n.ssid)
     if (obj) obj.connect()
   }
@@ -185,34 +191,6 @@ CcPage {
       }
     }
 
-    // One password box for the network you picked, outside the list: the
-    // list is rebuilt whenever it refreshes (signal strengths change every few
-    // seconds), which used to wipe what you were typing and take the focus.
-    CcRow {
-      visible: page.passwordFor !== ""
-      title: "Password for " + page.passwordFor
-      TextField {
-        id: pw
-        width: Style.space(240)
-        password: true
-        placeholderText: "Password"
-        foreground: page.cc.fg
-        onVisibleChanged: if (visible) forceActiveFocus()
-        Keys.onReturnPressed: connectBtn.clicked()
-      }
-      CcButton {
-        id: connectBtn
-        text: "Connect"
-        onClicked: {
-          if (pw.text.length === 0) return
-          var secret = pw.text, ssid = page.passwordFor
-          page.act(ssid, function(o) { o.connectWithPsk(secret) })
-          pw.text = ""
-          page.passwordFor = ""
-        }
-      }
-      CcButton { text: "Cancel"; onClicked: { pw.text = ""; page.passwordFor = "" } }
-    }
   }
 
   CcGroup {

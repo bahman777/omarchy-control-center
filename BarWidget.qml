@@ -425,6 +425,10 @@ Panel {
   function showMenu(id) { menu = ""; menu = id }
   function openPage(id) { if (pageOpener) pageOpener(id) }
   function launchTerminal(cmd) { launch(["omarchy-launch-floating-terminal-with-presentation", cmd], 0) }
+  // ask({ title, subtitle, placeholder, password, okText, value }, cb(text)):
+  // a dialog over the panel (quick/InputSheet.qml), present while it's open.
+  property var inputSheet: null
+  function ask(opts, cb) { if (inputSheet) inputSheet.ask(opts, cb) }
   property string toastText: ""
   function toast(text) { toastText = String(text); toastTimer.restart() }
   Timer { id: toastTimer; interval: 2200 }
@@ -622,6 +626,13 @@ Panel {
           qc: root
           flick: flick
         }
+      }
+
+      // Pop-up for anything typed (Wi-Fi passwords…): over everything, can't
+      // be scrolled out of sight. Opened through root.ask().
+      InputSheet {
+        id: inputSheet
+        Component.onCompleted: root.inputSheet = inputSheet
       }
 
       Rectangle {
