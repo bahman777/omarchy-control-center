@@ -22,6 +22,8 @@ Item {
   property bool password: false
   property bool reveal: false
   property var onAccept: null
+  // Called after it closes, to hand the keyboard back to the panel.
+  property var restoreFocus: null
 
   readonly property color fg: Color.menu.text
 
@@ -38,17 +40,18 @@ Item {
     opened = true
     Qt.callLater(function() { field.forceActiveFocus(); field.selectAll() })
   }
-  function cancel() {
+  function close() {
     opened = false
     field.text = ""
     onAccept = null
+    field.focus = false
+    if (restoreFocus) restoreFocus()
   }
+  function cancel() { close() }
   function accept() {
     var t = field.text, cb = onAccept
     if (t === "") return
-    opened = false
-    field.text = ""
-    onAccept = null
+    close()
     if (cb) cb(t)
   }
 
@@ -114,7 +117,7 @@ Item {
           foreground: sheet.fg
           Keys.onReturnPressed: sheet.accept()
           Keys.onEnterPressed: sheet.accept()
-          Keys.onEscapePressed: sheet.cancel()
+          Keys.onEscapePressed: function(event) { event.accepted = true; sheet.cancel() }
         }
         Button {
           id: showBtn

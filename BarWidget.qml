@@ -581,12 +581,17 @@ Panel {
       Keys.priority: Keys.BeforeItem
       Keys.onPressed: function(event) {
         var fi = keyRoot.Window.activeFocusItem
+        // While the pop-up is open its field has the keys; Esc only closes it.
+        if (root.inputSheet && root.inputSheet.opened) {
+          if (event.key === Qt.Key_Escape) { root.inputSheet.cancel(); event.accepted = true }
+          return
+        }
         if (fi && fi !== keyRoot) {
           // Only a text field (it has a cursor) or an open dropdown keeps
           // the keys. Anything else that took focus from a mouse click (a
           // button, the scroll bar, a closed dropdown) hands them back, so
           // hjkl and the arrows keep working after using the mouse.
-          var typing = fi.popupOpen === true || (fi.cursorPosition !== undefined && fi.readOnly !== true)
+          var typing = fi.popupOpen === true || (fi.cursorPosition !== undefined && fi.readOnly !== true && fi.visible)
           if (typing) {
             if (event.key === Qt.Key_Escape && fi.popupOpen !== true) { keyRoot.forceActiveFocus(); event.accepted = true }
             return
@@ -632,6 +637,7 @@ Panel {
       // be scrolled out of sight. Opened through root.ask().
       InputSheet {
         id: inputSheet
+        restoreFocus: function() { keyRoot.forceActiveFocus() }
         Component.onCompleted: root.inputSheet = inputSheet
       }
 
