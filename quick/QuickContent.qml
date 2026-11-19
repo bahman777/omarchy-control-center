@@ -102,6 +102,7 @@ Item {
     else { pageStack = []; expanded = req }
   }
   Component.onCompleted: {
+    syncWifiKeys()
     qc.pageOpener = openPage
     qc.nightToggle = function(on) { q.nightOn = on; q.nightApply(on) }
     applyRequest(qc.menu)
@@ -219,6 +220,18 @@ Item {
   readonly property var wiredDevice: deviceOf(DeviceType.Wired)
   readonly property var wifiObjects: wifiDevice && wifiDevice.networks ? wifiDevice.networks.values : []
   // Primitive rows only (see pages/WifiPage.qml).
+  // The networks shown, by SSID. Re-ordered only when the set changes, not
+  // as signal strengths move; each row reads its live state by SSID.
+  property var wifiKeys: []
+  function syncWifiKeys() {
+    var top = wifiRows.slice(0, 8).map(function(r) { return r.ssid })
+    if (top.slice().sort().join("\n") !== wifiKeys.slice().sort().join("\n")) wifiKeys = top
+  }
+  onWifiRowsChanged: syncWifiKeys()
+  function wifiRowFor(ssid) {
+    for (var i = 0; i < wifiRows.length; i++) if (wifiRows[i].ssid === ssid) return wifiRows[i]
+    return { ssid: ssid, connected: false, known: false, signal: 0, secure: false, changing: false }
+  }
   readonly property var wifiRows: {
     var list = []
     for (var i = 0; i < wifiObjects.length; i++) {
@@ -1346,21 +1359,25 @@ Item {
       QsMenuItem { visible: !Networking.wifiEnabled; text: "Wi-Fi is off"; clickable: false; dim: true }
       QsMenuItem { visible: Networking.wifiEnabled && q.wifiRows.length === 0; text: "Searching…"; clickable: false; dim: true }
       Repeater {
-        model: Networking.wifiEnabled ? q.wifiRows.slice(0, 8) : []
+        // SSIDs in a fixed order while the menu is open (see wifiKeys): the
+        // rows reshuffled by signal every few seconds, rebuilding the list
+        // under the keyboard highlight.
+        model: Networking.wifiEnabled ? q.wifiKeys : []
         delegate: Column {
           id: wr
-          required property var modelData
+          required property string modelData
+          readonly property var row: q.wifiRowFor(modelData)
           width: parent ? parent.width : 0
           QsMenuItem {
-            icon: Icons.wifiStrength(wr.modelData.signal)
-            text: wr.modelData.ssid
-            detail: wr.modelData.changing ? "Connecting…" : ""
-            checked: wr.modelData.connected
-            trailing: wr.modelData.secure && !wr.modelData.known ? Icons.lock : ""
+            icon: Icons.wifiStrength(wr.row.signal)
+            text: wr.row.ssid
+            detail: wr.row.changing ? "Connecting…" : ""
+            checked: wr.row.connected
+            trailing: wr.row.secure && !wr.row.known ? Icons.lock : ""
             onClicked: {
-              if (wr.modelData.connected) return
-              if (wr.modelData.secure && !wr.modelData.known) { q.askWifiPassword(wr.modelData.ssid); return }
-              var o = q.wifiObject(wr.modelData.ssid); if (o) o.connect()
+              if (wr.row.connected) return
+              if (wr.row.secure && !wr.row.known) { q.askWifiPassword(wr.row.ssid); return }
+              var o = q.wifiObject(wr.row.ssid); if (o) o.connect()
             }
           }
         }
