@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.bahman777.control-center",
   "name": "Control Center",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "bahman777",
   "license": "MIT",
   "description": "GNOME- and macOS-style Quick Settings for Omarchy: live colour status icons in the bar, glassy tiles and sliders, Now Playing, today's next meeting, an optional notification center, and a full settings app inside the panel (Wi-Fi, Bluetooth, sound, displays, power, Tailscale, Hyprland layout, input, appearance, printers and more).",

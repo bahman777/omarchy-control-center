@@ -165,7 +165,7 @@ Item {
   }
   function applyAppNow(cls, value) {
     runner.sh('for a in $(hyprctl clients -j | jq -r --arg c "$1" \'.[] | select(.class == $c) | .address\'); do '
-      + 'case "$a" in 0x[0-9a-fA-F]*) hyprctl dispatch "hl.dsp.window.set_prop({ window = \\"address:$a\\", prop = \\"opacity\\", value = \\"$2\\" })" >/dev/null ;; esac; done',
+      + '[[ $a =~ ^0x[0-9a-fA-F]+$ ]] && [[ $2 =~ ^[0-9.]+$ ]] && hyprctl dispatch "hl.dsp.window.set_prop({ window = \\"address:$a\\", prop = \\"opacity\\", value = \\"$2\\" })" >/dev/null; done',
       [cls, String(Number(value))], null)
   }
   Timer { id: reloadSoon; interval: 1200; onTriggered: root.runner.run(["hyprctl", "reload"], null) }
