@@ -324,7 +324,9 @@ Panel {
   // ------------------------------------------------------------ helpers for QuickContent
   // Request applied when the panel opens: a menu id ("wifi") or "page:<id>".
   property string menu: ""
-  onOpenedChanged: if (!opened) { menu = ""; pageMode = false }
+  // Closing the panel also closes the pop-up and forgets what was typed in
+  // it (and whether it was shown in clear).
+  onOpenedChanged: if (!opened) { menu = ""; pageMode = false; if (inputSheet) inputSheet.cancel() }
   property bool pageMode: false
   readonly property string buildStamp: String(Date.now())
   readonly property alias runner: runner

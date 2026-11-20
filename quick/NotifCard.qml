@@ -15,6 +15,7 @@ Rectangle {
   property bool compact: false
   property bool popup: false
   property bool showReply: row.hasReply && !popup
+  property bool replying: false
 
   // Keyboard cursor: the card itself runs its default action.
   property bool ccFocusable: visible
@@ -168,30 +169,51 @@ Rectangle {
       }
     }
 
-    Row {
-      visible: card.showReply
+    // The reply field exists only once you choose to reply (a Loader): an
+    // editable field kept around hidden on every card (pop-ups included) can
+    // be asked about the clipboard on some Qt Wayland builds and stall the
+    // shell. Sending or Esc puts the Reply button back.
+    Button {
+      visible: card.showReply && !card.replying
+      x: iconBox.width + Style.space(10)
+      text: "Reply"
+      bordered: true
+      foreground: card.fg
+      fontSize: Style.font.bodySmall
+      property bool ccFocusable: visible
+      function ccActivate() { clicked() }
+      onClicked: card.replying = true
+    }
+    Loader {
+      active: card.showReply && card.replying
+      visible: active
       width: parent.width
-      spacing: Style.space(6)
-      leftPadding: iconBox.width + Style.space(10)
-      TextField {
-        id: reply
-        width: parent.width - parent.leftPadding - sendBtn.width - Style.space(6)
-        placeholderText: card.row.replyPlaceholder || "Reply"
-        foreground: card.fg
-        property bool ccFocusable: visible
-        property bool hasCursor: false
-        function ccActivate() { forceActiveFocus() }
-        Keys.onReturnPressed: sendBtn.clicked()
-      }
-      Button {
-        id: sendBtn
-        text: "Send"
-        bordered: true
-        foreground: card.fg
-        fontSize: Style.font.bodySmall
-        property bool ccFocusable: visible
-        function ccActivate() { clicked() }
-        onClicked: if (reply.text.trim() !== "") { card.svc.reply(card.row.id, reply.text); reply.text = "" }
+      sourceComponent: Row {
+        width: parent ? parent.width : 0
+        spacing: Style.space(6)
+        leftPadding: iconBox.width + Style.space(10)
+        TextField {
+          id: reply
+          width: parent.width - parent.leftPadding - sendBtn.width - Style.space(6)
+          placeholderText: card.row.replyPlaceholder || "Reply"
+          foreground: card.fg
+          property bool ccFocusable: visible
+          property bool hasCursor: false
+          function ccActivate() { forceActiveFocus() }
+          Component.onCompleted: forceActiveFocus()
+          Keys.onReturnPressed: sendBtn.clicked()
+          Keys.onEscapePressed: function(event) { event.accepted = true; card.replying = false }
+        }
+        Button {
+          id: sendBtn
+          text: "Send"
+          bordered: true
+          foreground: card.fg
+          fontSize: Style.font.bodySmall
+          property bool ccFocusable: visible
+          function ccActivate() { clicked() }
+          onClicked: if (reply.text.trim() !== "") { card.svc.reply(card.row.id, reply.text); card.replying = false }
+        }
       }
     }
   }
