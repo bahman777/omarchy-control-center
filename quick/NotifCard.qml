@@ -73,8 +73,12 @@ Rectangle {
           id: img
           anchors.fill: parent
           visible: status === Image.Ready
+          // The app icon is a theme name or, from some apps, a file.
+          readonly property string appIcon: card.row.appIcon || ""
           source: card.row.image !== "" ? card.row.image
-            : card.row.appIcon !== "" ? Quickshell.iconPath(card.row.appIcon, true) : ""
+            : appIcon.charAt(0) === "/" ? "file://" + appIcon.split("/").map(encodeURIComponent).join("/")
+            : appIcon.indexOf("file://") === 0 ? appIcon
+            : appIcon !== "" ? Quickshell.iconPath(appIcon, true) : ""
           asynchronous: true
         }
         Text {
@@ -119,8 +123,9 @@ Rectangle {
         Text {
           width: parent.width
           visible: card.row.body !== ""
-          textFormat: Text.PlainText
-          text: card.row.body
+          // Already sanitised by NotifText.rich: only <b>, <i>, <u>, <br>.
+          textFormat: Text.StyledText
+          text: card.row.bodyRich || ""
           color: Qt.rgba(card.fg.r, card.fg.g, card.fg.b, 0.85)
           wrapMode: Text.Wrap
           maximumLineCount: card.compact ? 3 : 8

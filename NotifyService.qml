@@ -7,6 +7,7 @@ import Quickshell.Services.Notifications
 import Quickshell.Services.UPower
 import qs.Commons
 import "quick"
+import "NotifText.js" as NotifText
 
 // The Control Center's background service: peripheral batteries (always), and
 // the notification daemon, used when you switch it on
@@ -34,6 +35,8 @@ Scope {
   // ------------------------------------------------------------ settings
   property bool wants: false
   property bool dnd: false
+  // Play the sound a notification asks for (sound-name / sound-file hints).
+  property bool sounds: true
   property bool settingsLoaded: false
 
   FileView {
@@ -46,13 +49,14 @@ Scope {
         var o = JSON.parse(text())
         svc.wants = o.enabled === true
         svc.dnd = o.dnd === true
+        svc.sounds = o.sounds !== false
       } catch (e) {}
       svc.settingsLoaded = true
     }
     onLoadFailed: svc.settingsLoaded = true
   }
   function saveSettings() {
-    settingsFile.setText(JSON.stringify({ enabled: wants, dnd: dnd }, null, 2) + "\n")
+    settingsFile.setText(JSON.stringify({ enabled: wants, dnd: dnd, sounds: sounds }, null, 2) + "\n")
   }
   Process { running: true; command: ["mkdir", "-p", svc.stateDir] }
 
@@ -393,8 +397,9 @@ Scope {
       actionsSupported: true
       actionIconsSupported: false
       imageSupported: true
-      // Plain text everywhere: nothing a sender writes is rendered as markup.
-      bodyMarkupSupported: false
+      // Bodies show <b>, <i> and <u> only; everything else a sender writes is
+      // plain text (NotifText.rich escapes it, so no links or images).
+      bodyMarkupSupported: true
       bodyHyperlinksSupported: false
       bodyImagesSupported: false
       inlineReplySupported: true
@@ -405,10 +410,30 @@ Scope {
   readonly property var server: serverLoader.item
   readonly property var tracked: server && server.trackedNotifications ? server.trackedNotifications.values : []
 
+  function setSounds(on) { sounds = !!on; saveSettings() }
+
+  // A notification's own sound: a theme sound name (message-new-instant…) or
+  // a file, played with canberra-gtk-play. Skipped when sounds are off, when
+  // the sender asks for silence, and under Do Not Disturb (critical ones
+  // still sound).
+  function playSound(n) {
+    if (!sounds) return
+    var h = n.hints || {}
+    if (h["suppress-sound"] === true) return
+    if (dnd && n.urgency !== NotificationUrgency.Critical) return
+    var name = String(h["sound-name"] || ""), file = String(h["sound-file"] || "")
+    if (file.indexOf("file://") === 0) file = decodeURIComponent(file.slice(7))
+    if (file !== "" && file.charAt(0) === "/" && file.indexOf("\n") < 0)
+      Quickshell.execDetached(["canberra-gtk-play", "-f", file, "-d", "Notification"])
+    else if (/^[A-Za-z0-9._-]{1,64}$/.test(name))
+      Quickshell.execDetached(["canberra-gtk-play", "-i", name, "-d", "Notification"])
+  }
+
   function receive(n) {
     // Our battery alerts cover Omarchy's single 10% warning; don't show both.
     if (String(n.summary || "") === omarchyLowTitle) { n.dismiss(); return }
     n.tracked = true
+    playSound(n)
     var a = {}; for (var k in arrival) a[k] = arrival[k]; a[n.id] = Date.now(); arrival = a
     if (dnd && n.urgency !== NotificationUrgency.Critical) return
     // Every pop-up times out (it stays in the panel's list until cleared).
@@ -451,7 +476,8 @@ Scope {
       try { list = JSON.parse(text()) || [] } catch (e) { list = [] }
       svc.archived = list.slice(0, 50).map(function(r, i) {
         return { id: "a" + i + "-" + (r.time || 0), appName: String(r.appName || ""), appIcon: String(r.appIcon || ""),
-                 image: String(r.image || ""), summary: String(r.summary || ""), body: String(r.body || ""),
+                 image: String(r.image || ""), summary: NotifText.plain(r.summary || ""), body: NotifText.plain(r.body || ""),
+                 bodyRich: NotifText.rich(String(r.bodyRich || r.body || "").slice(0, 4000)),
                  urgency: Number(r.urgency) || 1, actions: [], hasDefault: false, hasReply: false,
                  replyPlaceholder: "", time: Number(r.time) || 0, archived: true }
       })
@@ -464,7 +490,7 @@ Scope {
     var out = rows.slice(0, 50).map(function(r) {
       var img = String(r.image || "")
       return { appName: r.appName, appIcon: r.appIcon, image: img.indexOf("/") === 0 || img.indexOf("file:") === 0 ? img : "",
-               summary: r.summary, body: r.body, urgency: r.urgency, time: r.time }
+               summary: r.summary, body: r.body, bodyRich: r.bodyRich, urgency: r.urgency, time: r.time }
     })
     historyFile.setText(JSON.stringify(out) + "\n")
   }
@@ -484,8 +510,8 @@ Scope {
       }
       list.push({
         id: n.id, appName: String(n.appName || "").slice(0, 60), appIcon: String(n.appIcon || ""),
-        image: String(n.image || ""), summary: String(n.summary || "").slice(0, 300),
-        body: String(n.body || "").slice(0, 2000), urgency: n.urgency === NotificationUrgency.Critical ? 2 : n.urgency === NotificationUrgency.Low ? 0 : 1,
+        image: String(n.image || ""), summary: NotifText.plain(n.summary || "").slice(0, 300),
+        body: NotifText.plain(n.body || "").slice(0, 2000), bodyRich: NotifText.rich(String(n.body || "").slice(0, 4000)), urgency: n.urgency === NotificationUrgency.Critical ? 2 : n.urgency === NotificationUrgency.Low ? 0 : 1,
         actions: acts.slice(0, 4), hasDefault: hasDefault, hasReply: !!n.hasInlineReply,
         replyPlaceholder: String(n.inlineReplyPlaceholder || ""), time: arrival[n.id] || Date.now()
       })

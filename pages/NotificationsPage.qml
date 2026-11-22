@@ -51,6 +51,14 @@ CcPage {
         else page.cc.runner.run(["omarchy-toggle-notification-silencing"], function() { page.refresh() })
       }
     }
+    CcSwitchRow {
+      visible: page.active
+      icon: page.active && page.svc.sounds ? Icons.volume : Icons.volumeOff
+      title: "Notification sounds"
+      subtitle: "Play the sound an app asks for. Silent during Do Not Disturb, except critical ones."
+      checked: page.active && page.svc.sounds
+      onToggled: if (page.active) page.svc.setSounds(!page.svc.sounds)
+    }
   }
 
   CcGroup {
